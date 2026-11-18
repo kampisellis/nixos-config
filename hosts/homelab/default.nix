@@ -38,6 +38,9 @@
       port = "auto";
       description = "PowerWalker VFI 1000 ICR IoT";
       directives = [
+        "user = root"
+        "vendorid = 06DA"
+        "productid = FFFF"
         "pollinterval = 10"
         "ignorelb"
         "override.battery.charge.low = 20"

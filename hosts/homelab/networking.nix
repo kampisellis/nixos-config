@@ -22,7 +22,7 @@
     ];
 
     defaultGateway = "10.10.10.1";
-    nameservers = [ "127.0.0.1" "1.1.1.1" ];
+    nameservers = [ "1.1.1.1" "1.0.0.1" ];
 
     firewall = {
       enable = true;
