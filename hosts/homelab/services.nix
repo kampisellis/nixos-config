@@ -4,6 +4,7 @@
   # 1. VAULTWARDEN (/var/lib/bitwarden_rs)
   services.vaultwarden = {
     enable = true;
+    package = pkgs-unstable.vaultwarden;
     dbBackend = "sqlite";
     backupDir = "/var/lib/backup/vaultwarden";
     config = {
