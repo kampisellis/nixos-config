@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, pkgs-unstable, ... }:
 
 {
   # Κλείδωμα της Realtek RTL8125 2.5GbE (MAC d8:5e:d3:9c:11:15) στο όνομα "nic0"
@@ -38,12 +38,35 @@
   };
 
   services.netbird = {
+    package = pkgs-unstable.netbird;
     useRoutingFeatures = "both";
     clients.wt0 = {
       port = 51820;
       interface = "wt0";
       openFirewall = true;
       autoStart = true;
+    };
+  };
+# Εφαρμογή των NetBird Route ACLs (netbird-rt-fwd) και στις τοπικές IP του server (INPUT)
+  systemd.services.netbird-local-route-fix = {
+    description = "Bridge NetBird route ACLs to INPUT chain for local server IPs";
+    after = [ "netbird-wt0.service" ];
+    bindsTo = [ "netbird-wt0.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = [ pkgs.nftables pkgs.gnugrep pkgs.coreutils ];
+    script = ''
+      while true; do
+        if nft list chain ip netbird netbird-acl-input-rules >/dev/null 2>&1; then
+          if ! nft list chain ip netbird netbird-acl-input-rules | grep -q "jump netbird-rt-fwd"; then
+            nft add rule ip netbird netbird-acl-input-rules jump netbird-rt-fwd || true
+          fi
+        fi
+        sleep 5
+      done
+    '';
+    serviceConfig = {
+      Restart = "always";
+      RestartSec = "2s";
     };
   };
 }
