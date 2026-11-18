@@ -74,7 +74,7 @@
     port = 9090;
     settings.WebService = {
       AllowUnencrypted = true;
-      Origins = "https://cockpit.kampisellis.com wss://cockpit.kampisellis.com";
+      Origins = lib.mkForce "https://cockpit.kampisellis.com wss://cockpit.kampisellis.com";
     };
   };
 
