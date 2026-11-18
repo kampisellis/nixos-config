@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, pkgs-unstable, ... }:
 
 {
   # 1. VAULTWARDEN (/var/lib/bitwarden_rs)
@@ -19,6 +19,7 @@
 
   services.immich = {
     enable = true;
+    package = pkgs-unstable.immich;
     host = "127.0.0.1";
     port = 2283;
     mediaLocation = "/mnt/nas-data/Giannis/Apps/Immich";

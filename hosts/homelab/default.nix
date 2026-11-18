@@ -75,12 +75,13 @@
   services.cockpit = {
     enable = true;
     port = 9090;
+    openFirewall = true;
     settings.WebService = {
       AllowUnencrypted = true;
-      Origins = lib.mkForce "https://cockpit.kampisellis.com wss://cockpit.kampisellis.com";
+      ProtocolHeader = "X-Forwarded-Proto";
+      Origins = lib.mkForce "https://cockpit.kampisellis.com wss://cockpit.kampisellis.com http://10.10.10.5:9090 ws://10.10.10.5:9090";
     };
   };
-
   systemd.services."notify-ntfy@" = {
     description = "Send failure alert to ntfy for %i";
     serviceConfig = {
