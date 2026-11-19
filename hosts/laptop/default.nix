@@ -74,7 +74,6 @@
   services = {
     fstrim.enable = true;
     fwupd.enable = true;
-    asusd.enable = true;
     switcherooControl.enable = true;
     power-profiles-daemon.enable = true;
 
@@ -169,7 +168,6 @@
 
     amdgpu_top
     android-tools
-    asusctl
     kdePackages.gwenview
     kdePackages.kate
     nfs-utils
