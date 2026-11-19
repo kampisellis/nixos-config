@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Flake Check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Evaluate flake (no-build)
+        run: nix flake check --no-build --show-trace
+
+      - name: Check formatting and linters
+        run: |
+          nix build \
+            .#checks.x86_64-linux.formatting \
+            .#checks.x86_64-linux.statix \
+            .#checks.x86_64-linux.deadnix \
+            --no-link

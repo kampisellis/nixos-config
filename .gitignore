@@ -1,0 +1,25 @@
+# Nix build outputs
+result
+result-*
+
+# Direnv / local environment
+.direnv/
+.envrc.local
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Never allow plaintext secrets into git
+*.env
+*.pass
+rclone.conf
+secrets/*.plain
+*.age.dec

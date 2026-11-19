@@ -1,149 +1,195 @@
-{ config, pkgs, ... }:
+{ lib, pkgs, ... }:
 
 {
   imports = [
     ./hardware-configuration.nix
   ];
 
-  networking.hostName = "laptop";
-  networking.networkmanager.enable = true;
-
-  # Bootloader: GRUB EFI στο /efi (Ιδανικό για το 100MB nvme0n1p1 partition)
-  boot.loader.systemd-boot.enable = false;
-  boot.loader.grub = {
-    enable = true;
-    device = "nodev";
-    efiSupport = true;
-    configurationLimit = 10;
-  };
-  boot.loader.efi = {
-    canTouchEfiVariables = true;
-    efiSysMountPoint = "/efi";
+  # Allows `nix flake check` to evaluate this host cleanly before hardware-configuration.nix is generated
+  nixpkgs = {
+    hostPlatform = lib.mkDefault "x86_64-linux";
+    config.allowUnfree = true;
   };
 
-  # Filesystems (Διατηρεί ανέπαφο το /home σου στο nvme0n1p2!)
-  fileSystems."/" = {
-    device = "/dev/nvme0n1p4";
-    fsType = "ext4";
+  networking = {
+    hostName = "laptop";
+    networkmanager.enable = true;
   };
 
-  fileSystems."/home" = {
-    device = "/dev/nvme0n1p2";
-    fsType = "ext4";
+  # Bootloader: GRUB EFI on /efi (kernels reside under /boot on root, fitting the 100 MB ESP)
+  boot = {
+    loader = {
+      systemd-boot.enable = false;
+      grub = {
+        enable = true;
+        device = "nodev";
+        efiSupport = true;
+        configurationLimit = 10;
+      };
+      efi = {
+        canTouchEfiVariables = true;
+        efiSysMountPoint = "/efi";
+      };
+    };
+
+    initrd.kernelModules = [ "amdgpu" ];
   };
 
-  fileSystems."/efi" = {
-    device = "/dev/nvme0n1p1";
-    fsType = "vfat";
+  # Placeholder label-based mounts using mkDefault so `nixos-generate-config` UUID entries
+  # in hardware-configuration.nix override them without conflicts during installation.
+  # Preserves the existing Arch /home partition (nvme0n1p2) untouched.
+  fileSystems = {
+    "/" = {
+      device = lib.mkDefault "/dev/disk/by-label/NIXLAPTOP";
+      fsType = lib.mkDefault "ext4";
+    };
+
+    "/home" = {
+      device = lib.mkDefault "/dev/disk/by-label/HOME";
+      fsType = lib.mkDefault "ext4";
+    };
+
+    "/efi" = {
+      device = lib.mkDefault "/dev/disk/by-label/EFI";
+      fsType = lib.mkDefault "vfat";
+      options = lib.mkDefault [
+        "fmask=0077"
+        "dmask=0077"
+      ];
+    };
   };
 
   zramSwap = {
     enable = true;
     memoryPercent = 50;
   };
-  services.fstrim.enable = true;
 
   # Hardware: ASUS TUF FX505DY (AMD Ryzen 5 3550H + Vega + Radeon RX 560X + RTL8821CE)
-  hardware.enableRedistributableFirmware = true;
-  hardware.cpu.amd.updateMicrocode = true;
-  boot.initrd.kernelModules = [ "amdgpu" ];
+  hardware = {
+    enableRedistributableFirmware = true;
+    cpu.amd.updateMicrocode = true;
 
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true;
+    graphics = {
+      enable = true;
+      enable32Bit = true;
+    };
+
+    bluetooth = {
+      enable = true;
+      powerOnBoot = true;
+    };
   };
 
-  services.asusd.enable = true;
-  services.switcherooControl.enable = true;
-  services.power-profiles-daemon.enable = true;
+  services = {
+    fstrim.enable = true;
+    fwupd.enable = true;
+    asusd.enable = true;
+    switcherooControl.enable = true;
+    power-profiles-daemon.enable = true;
 
-  # Desktop Environment: KDE Plasma 6 & SDDM (Wayland)
-  services.displayManager.sddm = {
-    enable = true;
-    wayland.enable = true;
+    # Desktop Environment: KDE Plasma 6 & SDDM (Wayland)
+    displayManager.sddm = {
+      enable = true;
+      wayland.enable = true;
+    };
+    desktopManager.plasma6.enable = true;
+
+    xserver.xkb = {
+      layout = "us,gr";
+      options = "grp:alt_shift_toggle";
+    };
+
+    # Audio (PipeWire), Printing & Flatpak
+    pulseaudio.enable = false;
+    pipewire = {
+      enable = true;
+      alsa = {
+        enable = true;
+        support32Bit = true;
+      };
+      pulse.enable = true;
+      jack.enable = true;
+    };
+
+    printing.enable = true;
+    flatpak.enable = true;
   };
-  services.desktopManager.plasma6.enable = true;
 
-  services.xserver.xkb = {
-    layout = "us,gr";
-    options = "grp:alt_shift_toggle";
-  };
-
-  # Audio (PipeWire), Bluetooth, Printing & AppImage/Flatpak Support
-  services.pulseaudio.enable = false;
   security.rtkit.enable = true;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-    jack.enable = true;
-  };
 
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = true;
-  };
-
-  services.printing.enable = true;
-  services.flatpak.enable = true;
-  services.rpcbind.enable = true;
-
-  # Εγγενής εκτέλεση AppImages (για το ES-DE Frontend)
+  # Native AppImage execution (for ES-DE Frontend)
   programs.appimage = {
     enable = true;
     binfmt = true;
   };
 
-  users.users.giannis = {
-    isNormalUser = true;
-    uid = 1000;
-    extraGroups = [ "wheel" "networkmanager" "video" "render" "audio" "lp" "adbusers" ];
+  # Match existing Arch UID/GID (1000:1000) to preserve /home ownership — verify with `id` before install.
+  # systemd uaccess rules handle Android ADB devices without requiring a legacy adbusers group.
+  users = {
+    groups.giannis.gid = 1000;
+
+    users.giannis = {
+      isNormalUser = true;
+      uid = 1000;
+      group = "giannis";
+      extraGroups = [
+        "audio"
+        "lp"
+        "networkmanager"
+        "render"
+        "video"
+        "wheel"
+      ];
+    };
   };
 
-  # Όλα τα πακέτα σου (RetroArch με Cores, PCSX2, Browsers, Comms, Media & Tools)
   environment.systemPackages = with pkgs; [
-    (retroarch.withCores (cores: with cores; [
-      beetle-psx-hw
-      bsnes
-      flycast
-      genesis-plus-gx
-      melonds
-      mgba
-      mupen64plus-next
-      snes9x
-      fbneo
-    ]))
+    (retroarch.withCores (
+      cores: with cores; [
+        beetle-psx-hw
+        bsnes
+        fbneo
+        flycast
+        genesis-plus-gx
+        melonds
+        mgba
+        mupen64plus
+        snes9x
+      ]
+    ))
     pcsx2
 
-    librewolf
+    # betterbird # Install via Flatpak (eu.betterbird.Betterbird) or use thunderbird
     chromium
-    betterbird
     element-desktop
-    vesktop
-    telegram-desktop
+    firefox
     signal-desktop
-    whatsie
+    telegram-desktop
+    vesktop
+    # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
 
+    jdk11
+    jetbrains-toolbox
+    metadata-cleaner
+    mpv
     obsidian
     onlyoffice-desktopeditors
-    jetbrains-toolbox
-    jdk11
-    mpv
-    spotify
     picard
-    metadata-cleaner
+    spotify
 
-    kate
-    gwenview
-    peazip
     amdgpu_top
-    nvtop
-    asusctl
     android-tools
+    asusctl
+    kdePackages.gwenview
+    kdePackages.kate
+    nfs-utils
+    ntfs3g
+    nvtopPackages.amd
+    peazip
     smartmontools
     testdisk
-    ntfs3g
-    nfs-utils
   ];
+
+  # Target NixOS release for initial laptop installation (after Phase 2 bump to 26.05)
+  system.stateVersion = "26.05";
 }

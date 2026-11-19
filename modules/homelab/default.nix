@@ -1,0 +1,22 @@
+{
+  imports = [
+    ./options.nix
+    ./base.nix
+    ./networking.nix
+    ./storage.nix
+    ./backup.nix
+    ./samba.nix
+    ./ups.nix
+    ./caddy.nix
+    ./homepage.nix
+    ./motd.nix
+    ./services/vaultwarden.nix
+    ./services/immich.nix
+    ./services/radicale.nix
+    ./services/couchdb.nix
+    ./services/lidarr.nix
+    ./services/uptime-kuma.nix
+    ./services/ntfy.nix
+    ./services/searxng.nix
+  ];
+}
