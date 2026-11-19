@@ -102,7 +102,7 @@
     };
 
     printing.enable = true;
-    flatpak.enable = true;
+    flatpak.enable = false;
   };
 
   security.rtkit.enable = true;
@@ -148,7 +148,10 @@
     ))
     pcsx2
 
-    # betterbird # Install via Flatpak (eu.betterbird.Betterbird) or use thunderbird
+    thunderbird
+    discord
+    jetbrains.clion
+    vscode
     chromium
     element-desktop
     firefox
