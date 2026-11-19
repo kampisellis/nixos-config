@@ -45,7 +45,7 @@
         };
     in
     {
-      formatter.${system} = formatterPkg;
+      formatter.${system} = pkgs.nixfmt-tree;
 
       devShells.${system}.default = import ./modules/devshell.nix {
         inherit pkgs formatterPkg;
@@ -58,7 +58,7 @@
 
       checks.${system} = {
         formatting = pkgs.runCommand "check-formatting" { nativeBuildInputs = [ formatterPkg ]; } ''
-          nixfmt --check ${self}
+          find ${self} -name "*.nix" -exec nixfmt --check {} +
           touch $out
         '';
 
