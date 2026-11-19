@@ -159,7 +159,7 @@
     # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
 
     jdk11
-    jetbrains-toolbox
+    # jetbrains-toolbox # upstream 404 in 26.05
     metadata-cleaner
     mpv
     obsidian
