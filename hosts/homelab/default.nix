@@ -18,7 +18,7 @@
 
     vaultwarden = {
       enable = true;
-      useUnstable = true;
+      useUnstable = false;
     };
 
     immich = {

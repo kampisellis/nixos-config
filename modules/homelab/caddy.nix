@@ -49,7 +49,7 @@ in
       # 2. Run `just build homelab` and copy the `got: sha256-...` value here.
       package = pkgs.caddy.withPlugins {
         plugins = [ "github.com/caddy-dns/cloudflare@v0.2.4" ];
-        hash = "sha256-Q0lgI8MY90u/5R/xXBVPQWCZBN7dUZ0kcuDxD0xd0fo=";
+        hash = "sha256-tubXIDCJnO2mvdnPlZclwDhNGaeeYLSt7lnni3+pXDo=";
       };
 
       environmentFile = "${cfg.secretsDir}/caddy.env";

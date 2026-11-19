@@ -4,7 +4,7 @@
   inputs = {
     # Phase 1: keep current release for safe refactoring.
     # Phase 2: switch to "github:nixos/nixpkgs/nixos-26.05" and run `nix flake update nixpkgs`.
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
@@ -20,7 +20,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
 
       # Format Nix code using the official RFC-166 formatter.
-      formatterPkg = pkgs.nixfmt-rfc-style or pkgs.nixfmt;
+      formatterPkg = pkgs.nixfmt;
 
       mkHost =
         {
