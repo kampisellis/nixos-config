@@ -37,7 +37,7 @@ jobs:
           title: "chore(flake): weekly nixpkgs update"
           body: |
             Automated weekly update of the stable `nixpkgs` input only.
-            `nixpkgs-unstable` is intentionally excluded to prevent unintended DB-backed service upgrades (Immich, Vaultwarden).
+            `nixpkgs-unstable` is intentionally excluded to prevent unintended DB-backed service upgrades (Immich, NetBird).
 
             Review the diff and test on `homelab` with:
             ```bash

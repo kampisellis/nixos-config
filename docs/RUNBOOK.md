@@ -66,7 +66,7 @@ sudo mount -t zfs tank/data /mnt/mnt/nas-data
 sudo nixos-generate-config --no-filesystems --root /mnt
 sudo cp /mnt/etc/nixos/hardware-configuration.nix /tmp/hardware-configuration.nix
 sudo rm -f /mnt/etc/nixos/configuration.nix /mnt/etc/nixos/hardware-configuration.nix
-sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos
+sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos
 sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-configuration.nix
 sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
 
@@ -99,7 +99,7 @@ sudo chmod 0400 /var/lib/secrets/searx.env
 
 # 3. NUT upsmon password
 printf '%s\n' '<PASSWORD>' | sudo tee /var/lib/secrets/upsmon.pass > /dev/null
-sudo chown root:nut /var/lib/secrets/upsmon.pass
+sudo chown root:nutmon /var/lib/secrets/upsmon.pass
 sudo chmod 0440 /var/lib/secrets/upsmon.pass
 
 # 4. Optional rclone config (empty file disables gdrive-roms cleanly)
@@ -232,25 +232,31 @@ Confirm in BIOS that **Restore on AC Power Loss = Power On**.
 
 ---
 
-## 10. Laptop Pre-Migration Backup & Install (`ASUS TUF FX505DY`)
+## 10. Clean NixOS 26.05 Install on Laptop (`ASUS TUF FX505DY`)
 
-### Before Leaving Arch Linux
+Clean GPT layout on `/dev/nvme0n1`:
+
+- `p1`: `1 GiB` FAT32 ESP mounted on `/boot` (label `NIXBOOT`)
+- `p2`: remaining space `ext4` mounted on `/` (label `NIXROOT`)
 
 ```bash
-mkdir -p ~/arch-migration-backup
-pacman -Qqen > ~/arch-migration-backup/pkglist-native.txt
-pacman -Qqem > ~/arch-migration-backup/pkglist-aur.txt
-flatpak list --app --columns=application > ~/arch-migration-backup/flatpaks.txt 2>/dev/null || true
-sudo cp -a /etc/NetworkManager/system-connections ~/arch-migration-backup/nm-connections
-sudo chown -R "$USER:$USER" ~/arch-migration-backup/nm-connections
-chmod 0700 ~/arch-migration-backup/nm-connections
-id > ~/arch-migration-backup/id.txt
-lsblk -f > ~/arch-migration-backup/lsblk.txt
+DISK="/dev/nvme0n1"
+sudo parted -s "$DISK" mklabel gpt
+sudo parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
+sudo parted -s "$DISK" set 1 esp on
+sudo parted -s "$DISK" mkpart root ext4 1025MiB 100%
+sudo udevadm settle
+
+sudo mkfs.fat -F 32 -n NIXBOOT "${DISK}p1"
+sudo mkfs.ext4 -F -L NIXROOT "${DISK}p2"
+
+sudo mount "${DISK}p2" /mnt
+sudo mkdir -p /mnt/boot /mnt/tmp
+sudo mount -o fmask=0077,dmask=0077 "${DISK}p1" /mnt/boot
+
+nix-shell -p git --run "sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos"
+sudo nixos-generate-config --root /mnt --show-hardware-config | sudo tee /mnt/etc/nixos/hosts/laptop/hardware-configuration.nix > /dev/null
+sudo TMPDIR=/mnt/tmp nixos-install --root /mnt --flake /mnt/etc/nixos#laptop
+sudo rm -rf /mnt/tmp/*
+sudo nixos-enter --root /mnt -c 'passwd giannis'
 ```
-
-### Installing NixOS 26.05 (Preserving `/home` and `/efi`)
-
-1. Boot the NixOS 26.05 ISO.
-2. Format **only** the root partition (label `NIXLAPTOP`) — do **not** format `/home` (`HOME`) or `/efi` (`EFI`).
-3. Mount under `/mnt`, `/mnt/home`, and `/mnt/efi`.
-4. Generate `hosts/laptop/hardware-configuration.nix`, verify `nixos-install --flake .#laptop`, and reboot.

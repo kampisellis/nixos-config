@@ -2,8 +2,6 @@
   description = "Kampisellis NixOS Infrastructure (Homelab Server & ASUS TUF Laptop)";
 
   inputs = {
-    # Phase 1: keep current release for safe refactoring.
-    # Phase 2: switch to "github:nixos/nixpkgs/nixos-26.05" and run `nix flake update nixpkgs`.
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
   };
