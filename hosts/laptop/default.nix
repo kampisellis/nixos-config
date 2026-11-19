@@ -16,41 +16,32 @@
     networkmanager.enable = true;
   };
 
-  # Bootloader: GRUB EFI on /efi (kernels reside under /boot on root, fitting the 100 MB ESP)
+  # Bootloader: systemd-boot on a 1 GiB FAT32 ESP (/boot)
   boot = {
     loader = {
-      systemd-boot.enable = false;
-      grub = {
+      systemd-boot = {
         enable = true;
-        device = "nodev";
-        efiSupport = true;
         configurationLimit = 10;
       };
-      efi = {
-        canTouchEfiVariables = true;
-        efiSysMountPoint = "/efi";
-      };
+      efi.canTouchEfiVariables = true;
     };
 
-    initrd.kernelModules = [ "amdgpu" ];
+    initrd = {
+      systemd.enable = true;
+      kernelModules = [ "amdgpu" ];
+    };
   };
 
   # Placeholder label-based mounts using mkDefault so `nixos-generate-config` UUID entries
   # in hardware-configuration.nix override them without conflicts during installation.
-  # Preserves the existing Arch /home partition (nvme0n1p2) untouched.
   fileSystems = {
     "/" = {
-      device = lib.mkDefault "/dev/disk/by-label/NIXLAPTOP";
+      device = lib.mkDefault "/dev/disk/by-label/NIXROOT";
       fsType = lib.mkDefault "ext4";
     };
 
-    "/home" = {
-      device = lib.mkDefault "/dev/disk/by-label/HOME";
-      fsType = lib.mkDefault "ext4";
-    };
-
-    "/efi" = {
-      device = lib.mkDefault "/dev/disk/by-label/EFI";
+    "/boot" = {
+      device = lib.mkDefault "/dev/disk/by-label/NIXBOOT";
       fsType = lib.mkDefault "vfat";
       options = lib.mkDefault [
         "fmask=0077"
@@ -123,7 +114,6 @@
     binfmt = true;
   };
 
-  # Match existing Arch UID/GID (1000:1000) to preserve /home ownership — verify with `id` before install.
   # systemd uaccess rules handle Android ADB devices without requiring a legacy adbusers group.
   users = {
     groups.giannis.gid = 1000;
@@ -190,6 +180,5 @@
     testdisk
   ];
 
-  # Target NixOS release for initial laptop installation (after Phase 2 bump to 26.05)
   system.stateVersion = "26.05";
 }
