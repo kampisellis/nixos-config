@@ -1,141 +1,256 @@
-# Homelab & Laptop Operations Runbook
+# Homelab Operations & Disaster Recovery Runbook
 
-## 1. Safe Deployment & Rollback
+## 1. Safe Deployment & Emergency Rollback
 
-Always validate and diff before activating changes on the headless server:
+Always validate and inspect diffs before activating on the headless server:
 
 ```bash
 cd /etc/nixos
 just check
+just lint
 just diff homelab
 just test homelab     # Temporary activation (reverts on reboot)
 ```
 
-Keep your current SSH session open and verify a **second** SSH login + critical services before running:
+Keep your existing SSH session open, verify a second SSH login and core services, then persist:
 
 ```bash
-just switch homelab   # Permanent activation + bootloader entry
+just switch homelab
 ```
 
-### Emergency Rollback
+### Rollback
 
-- **Without reboot:**
-  ```bash
-  sudo nixos-rebuild switch --rollback
-  ```
-- **From systemd-boot menu (physical console):** Select the previous generation (up to 5 generations are retained on `/boot`).
+- **Live rollback (without reboot):** `sudo nixos-rebuild switch --rollback`
+- **From systemd-boot (physical console):** Select the previous generation (up to 5 are retained on `/boot`).
 
 ---
 
-## 2. ZFS Snapshots, Sanoid & Syncoid
+## 2. Bare-Metal Root SSD Recovery (`homelab`)
+
+Use this procedure if the 240GB boot SSD fails while the ZFS pools (`tank`, `backup`) remain intact.
+
+### Step 1: Partition & Format ONLY the Replacement Boot SSD
+
+Verify the target disk via `lsblk -o NAME,SIZE,MODEL,SERIAL` and `/dev/disk/by-id/`. Never touch ZFS pool disks.
+
+```bash
+DISK="/dev/disk/by-id/<NEW_BOOT_SSD_ID>"
+
+sudo parted "$DISK" -- mklabel gpt
+sudo parted "$DISK" -- mkpart ESP fat32 1MiB 512MiB
+sudo parted "$DISK" -- set 1 esp on
+sudo parted "$DISK" -- mkpart root ext4 512MiB 100%
+
+sudo mkfs.fat -F 32 -n NIXBOOT "${DISK}-part1"
+sudo mkfs.ext4 -F -L NIXROOT "${DISK}-part2"
+```
+
+### Step 2: Mount Root, Boot, and Import Existing ZFS Pools
+
+```bash
+sudo mount /dev/disk/by-label/NIXROOT /mnt
+sudo mkdir -p /mnt/boot
+sudo mount -o fmask=0077,dmask=0077 /dev/disk/by-label/NIXBOOT /mnt/boot
+
+sudo zpool import -f -R /mnt tank
+sudo zpool import -f -R /mnt backup
+
+sudo mkdir -p /mnt/var/lib /mnt/mnt/nas-data
+sudo mount -t zfs tank/var-lib /mnt/var/lib
+sudo mount -t zfs tank/data /mnt/mnt/nas-data
+```
+
+### Step 3: Clone Repo & Install NixOS
+
+```bash
+sudo nixos-generate-config --no-filesystems --root /mnt
+sudo cp /mnt/etc/nixos/hardware-configuration.nix /tmp/hardware-configuration.nix
+sudo rm -f /mnt/etc/nixos/configuration.nix /mnt/etc/nixos/hardware-configuration.nix
+sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos
+sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-configuration.nix
+sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
+
+sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab
+```
+
+After rebooting, set user and Samba passwords if `/etc/shadow` was recreated:
+
+```bash
+sudo passwd gkampisellis
+sudo smbpasswd -a gkampisellis
+```
+
+---
+
+## 3. Clean Bootstrap of Runtime Credentials & CouchDB
+
+If runtime credentials must be recreated from scratch:
+
+```bash
+sudo install -d -m 0700 -o root -g root /var/lib/secrets
+
+# 1. Cloudflare DNS-01 API Token (Zone:DNS:Edit)
+printf 'CLOUDFLARE_API_TOKEN=%s\n' '<TOKEN>' | sudo tee /var/lib/secrets/caddy.env > /dev/null
+sudo chmod 0400 /var/lib/secrets/caddy.env
+
+# 2. SearXNG secret key
+printf 'SEARX_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" | sudo tee /var/lib/secrets/searx.env > /dev/null
+sudo chmod 0400 /var/lib/secrets/searx.env
+
+# 3. NUT upsmon password
+printf '%s\n' '<PASSWORD>' | sudo tee /var/lib/secrets/upsmon.pass > /dev/null
+sudo chown root:nut /var/lib/secrets/upsmon.pass
+sudo chmod 0440 /var/lib/secrets/upsmon.pass
+
+# 4. Optional rclone config (empty file disables gdrive-roms cleanly)
+sudo touch /var/lib/secrets/rclone.conf
+sudo chmod 0400 /var/lib/secrets/rclone.conf
+```
+
+### Recreating CouchDB `local.ini` (Obsidian LiveSync)
+
+```bash
+sudo tee /var/lib/couchdb/local.ini > /dev/null <<'EOF'
+[couchdb]
+single_node = true
+max_document_size = 50000000
+
+[chttpd]
+require_valid_user = true
+max_http_request_size = 4294967296
+
+[chttpd_auth]
+require_valid_user = true
+authentication_redirect = /_utils/session.html
+
+[httpd]
+WWW-Authenticate = Basic realm="couchdb"
+enable_cors = true
+
+[cors]
+origins = app://obsidian.md,capacitor://localhost,http://localhost
+credentials = true
+headers = accept, authorization, content-type, origin, referer
+methods = GET, PUT, POST, HEAD, DELETE
+max_age = 3600
+
+[admins]
+admin = <SET_NEW_ADMIN_PASSWORD_HERE>
+EOF
+sudo chown couchdb:couchdb /var/lib/couchdb/local.ini
+sudo chmod 0600 /var/lib/couchdb/local.ini
+sudo systemctl restart couchdb
+```
+
+---
+
+## 4. ZFS Maintenance, Snapshots & Syncoid
+
+### Recommended Dataset Properties
+
+```bash
+sudo zfs set atime=off compression=lz4 tank/var-lib
+sudo zfs set atime=off compression=lz4 tank/data
+zfs get atime,compression,recordsize,mountpoint tank/var-lib tank/data
+```
 
 ### Manual Pre-Change Snapshot
 
-Use distinct names on `tank` vs `backup` if snapshotting both manually so Syncoid does not hit a duplicate snapshot name collision:
+Snapshot only `tank` (not `backup` with the same tag) so Syncoid does not hit a duplicate snapshot collision:
 
 ```bash
-TAG="manual-$(date +%Y%m%d-%H%M)"
-sudo zfs snapshot -r "tank@${TAG}"
+sudo zfs snapshot -r "tank@manual-$(date +%Y%m%d-%H%M)"
 ```
 
-### Syncoid Duplicate Snapshot Collision
-
-If `syncoid-state-backup` or `syncoid-data-backup` fails with `destination already exists`:
+If Syncoid ever reports `destination already exists`:
 
 ```bash
-sudo zfs rename backup/var-lib@<conflicting-snap> backup/var-lib@local-<conflicting-snap>
+sudo zfs rename backup/var-lib@<snap> backup/var-lib@local-<snap>
 sudo systemctl start syncoid-state-backup.service
 ```
 
-### Pool Health & Scrubs
+---
+
+## 5. Updating Caddy Cloudflare Plugin Hash
+
+When a `nixpkgs` bump updates Caddy or Go dependencies in `modules/homelab/caddy.nix`:
+
+1. Run `nixos-rebuild build --flake .#homelab`.
+2. Copy the `got: sha256-...` hash from the fixed-output derivation error into `modules/homelab/caddy.nix`.
+3. Re-run `just lint` and `just diff homelab`.
+
+---
+
+## 6. Technitium DNS Policy & MikroTik Fallback
+
+Technitium runs from stable NixOS (`15.6.2+`) with `DynamicUser=yes` (`/var/lib/private/technitium-dns-server`).
+
+- **Local End Points:** `127.0.0.1:53`, `10.10.10.5:53`, `10.10.10.101:53`.
+- **Forwarders:** `1.1.1.1`, `1.0.0.1`.
+- **MikroTik Fallback:** Set DHCP DNS Servers to `10.10.10.101,10.10.10.1`, enable `Allow Remote Requests` on RouterOS (while dropping WAN TCP/UDP 53), and add static fallback entries for `cockpit`, `home`, and `vault` pointing to `10.10.10.105`.
+
+---
+
+## 7. Immich Database Non-Destructive Restore Drill
+
+Daily SQL dumps are written to `/var/lib/backup/postgresql/immich.sql.gz` at `02:15`.
 
 ```bash
-sudo zpool status -x
-sudo zpool list
+sudo ls -lh /var/lib/backup/postgresql/
+
+sudo -u postgres dropdb --if-exists immich_restore_test
+sudo -u postgres createdb -O immich immich_restore_test
+sudo bash -c 'zcat /var/lib/backup/postgresql/immich.sql.gz | sudo -u postgres psql -v ON_ERROR_STOP=1 -d immich_restore_test > /dev/null'
+
+sudo -u postgres psql -d immich_restore_test -c "SELECT count(*) AS assets FROM assets; SELECT count(*) AS users FROM users;"
+sudo -u postgres dropdb immich_restore_test
 ```
 
-ZED (`zfs-zed`) and `smartd` forward alerts directly to `http://127.0.0.1:5055/homelab-alerts`.
+---
+
+## 8. Retiring `netbird-local-route-fix`
+
+Once the external VPS and all NetBird peers target `100.76.70.223` directly instead of LAN alias IPs:
+
+1. Point the external VPS upstream for `kampisellis.com` to `100.76.70.223:8085`.
+2. Update NetBird ACLs (TCP/UDP 53, TCP 80/443 for personal peers; TCP 8085 for VPS) and NetBird Nameserver to `100.76.70.223` (adding `100.76.70.223:53` to Technitium Local End Points).
+3. Set `homelab.netbird.enableLocalRouteFix = false;` in `hosts/homelab/default.nix`, test over 4G/5G + public internet, then `just switch homelab`.
 
 ---
 
-## 3. Out-of-Repo Secrets (`/var/lib/secrets`)
+## 9. Controlled UPS Shutdown Test (20% Threshold)
 
-Directory permissions are enforced as `0700 root:root` via `systemd.tmpfiles.rules`.
+```bash
+sudo zfs snapshot -r tank@pre-ups-test
+upsc myups@localhost | grep -E 'battery.charge|ups.status|battery.runtime'
 
-| File | Consumer | Contents / Notes |
-| --- | --- | --- |
-| `caddy.env` | `caddy.service` | `CLOUDFLARE_API_TOKEN=...` |
-| `searx.env` | `searx.service` | `SEARX_SECRET_KEY=<64-hex-chars>` |
-| `upsmon.pass` | `upsd` / `upsmon` | Plaintext password for NUT `upsmon` user |
-| `rclone.conf` | `gdrive-roms.service` | Optional; service skips cleanly if empty |
+# WARNING: triggers a real graceful OS shutdown — run only when ready to power back on
+sudo upsmon -c fsd
+```
 
-Back up `/var/lib/secrets` encrypted off-host whenever any secret changes.
-
----
-
-## 4. Updating Caddy Cloudflare Plugin Hash
-
-When updating `nixpkgs` or bumping `github.com/caddy-dns/cloudflare` in `modules/homelab/caddy.nix`:
-
-1. Temporarily set `hash = lib.fakeHash;`.
-2. Run `nixos-rebuild build --flake .#homelab`.
-3. Copy the `got: sha256-...` value from the error output back into `modules/homelab/caddy.nix`.
-4. Re-run `just check` and `just diff homelab`.
+Confirm in BIOS that **Restore on AC Power Loss = Power On**.
 
 ---
 
-## 5. NixOS Channel Upgrade Checklist (25.11 -> 26.05)
+## 10. Laptop Pre-Migration Backup & Install (`ASUS TUF FX505DY`)
 
-1. Take a pre-upgrade ZFS snapshot:
-   ```bash
-   sudo zfs snapshot -r tank@pre-2605
-   ```
-2. Check live versions vs `nixos-26.05` before toggling any `useUnstable` flags:
-   - `immich` (must be >= live PostgreSQL schema version; never downgrade)
-   - `vaultwarden` (must be >= live SQLite schema version)
-   - `netbird` (must match self-hosted management server & mobile clients)
-   - `postgresql` (explicitly pinned to `pkgs.postgresql_16` in `modules/homelab/services/immich.nix`)
-3. Keep `boot.initrd.systemd.enable = false;` on this headless ZFS server unless testing with physical console access.
-4. Update `nixpkgs.url` in `flake.nix` to `github:NixOS/nixpkgs/nixos-26.05` and run `nix flake update`.
-5. Run `just check`, `just diff homelab`, `just test homelab`, verify all services + second SSH session, then `just switch homelab`.
+### Before Leaving Arch Linux
 
----
+```bash
+mkdir -p ~/arch-migration-backup
+pacman -Qqen > ~/arch-migration-backup/pkglist-native.txt
+pacman -Qqem > ~/arch-migration-backup/pkglist-aur.txt
+flatpak list --app --columns=application > ~/arch-migration-backup/flatpaks.txt 2>/dev/null || true
+sudo cp -a /etc/NetworkManager/system-connections ~/arch-migration-backup/nm-connections
+sudo chown -R "$USER:$USER" ~/arch-migration-backup/nm-connections
+chmod 0700 ~/arch-migration-backup/nm-connections
+id > ~/arch-migration-backup/id.txt
+lsblk -f > ~/arch-migration-backup/lsblk.txt
+```
 
-## 6. Technitium DNS: Option A vs Option B
+### Installing NixOS 26.05 (Preserving `/home` and `/efi`)
 
-- **Option B (default, `homelab.technitium.useUnstable = false`):** Runs Technitium from stable `nixpkgs` with clean config.
-- **Option A (`homelab.technitium.useUnstable = true`):** Use only if a legacy v15+ config requires a newer Technitium build from `nixpkgs-unstable`.
-
----
-
-## 7. Retiring `netbird-local-route-fix`
-
-Currently, `netbird-local-route-fix.service` bridges `netbird-rt-fwd` into `netbird-acl-input-rules` so VPN peers and the external VPS can reach local LAN alias IPs (`10.10.10.101`, `.105`, `.109`) hosted on `nic0`.
-
-Once the external VPS and all NetBird peers target the server's NetBird peer IP (`100.76.70.223`) directly instead of LAN aliases:
-
-1. Set `homelab.netbird.enableLocalRouteFix = false;` in `hosts/homelab/default.nix`.
-2. Run `just test homelab`.
-3. Verify external VPS -> static site (`:8085`), Caddy subdomains, and Technitium DNS over NetBird.
-4. Run `just switch homelab`.
-
----
-
-## 8. Installing NixOS on ASUS TUF FX505DY (`laptop`)
-
-1. From the existing Arch install, verify UID/GID matches `1000:1000`:
-   ```bash
-   id giannis
-   ```
-2. Boot the NixOS 26.05 minimal/graphical ISO.
-3. Format **only** the root partition (label `NIXLAPTOP`) — **do NOT format** `/home` (`nvme0n1p2`, label `HOME`) or `/efi` (100 MB ESP, label `EFI`).
-4. Mount partitions under `/mnt`, `/mnt/home`, and `/mnt/efi`.
-5. Generate hardware config into the cloned repo:
-   ```bash
-   nixos-generate-config --root /mnt --show-hardware-config > hosts/laptop/hardware-configuration.nix
-   ```
-6. Install from the flake:
-   ```bash
-   sudo nixos-install --flake .#laptop
-   ```
-7. After first boot, install optional Flatpaks (`eu.betterbird.Betterbird`, WhatsApp client if needed).
+1. Boot the NixOS 26.05 ISO.
+2. Format **only** the root partition (label `NIXLAPTOP`) — do **not** format `/home` (`HOME`) or `/efi` (`EFI`).
+3. Mount under `/mnt`, `/mnt/home`, and `/mnt/efi`.
+4. Generate `hosts/laptop/hardware-configuration.nix`, verify `nixos-install --flake .#laptop`, and reboot.

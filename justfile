@@ -15,7 +15,7 @@ lint:
 
 # Format all Nix files in-place using RFC-166 nixfmt
 fmt:
-    nix fmt .
+    nix fmt
 
 # Build system configuration into ./result without activating
 build host=default_host:
