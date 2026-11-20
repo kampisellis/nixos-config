@@ -54,6 +54,29 @@ in
           };
         };
       };
+
+      restic.backups.gdrive-system = {
+        initialize = true;
+        repository = "rclone:gdrive:homelab-backups/system-encrypted";
+        passwordFile = "/var/lib/secrets/restic.pass";
+        rcloneConfigFile = "/var/lib/secrets/rclone-backup.conf";
+        paths = [
+          "/var/lib/backup/postgresql"
+          "/var/lib/vaultwarden"
+          "/var/lib/radicale"
+          "/var/lib/couchdb"
+          "/var/lib/secrets"
+        ];
+        timerConfig = {
+          OnCalendar = "*-*-* 03:45:00";
+          Persistent = true;
+        };
+        pruneOpts = [
+          "--keep-daily 7"
+          "--keep-weekly 4"
+          "--keep-monthly 6"
+        ];
+      };
     };
 
     systemd.services = {
@@ -61,6 +84,16 @@ in
       syncoid-state-backup.onFailure = [ "notify-ntfy@%n.service" ];
       syncoid-data-backup.onFailure = [ "notify-ntfy@%n.service" ];
       postgresqlBackup-immich.onFailure = [ "notify-ntfy@%n.service" ];
+
+      restic-backups-gdrive-system = {
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        onFailure = [ "notify-ntfy@%n.service" ];
+        unitConfig.ConditionFileNotEmpty = [
+          "/var/lib/secrets/restic.pass"
+          "/var/lib/secrets/rclone-backup.conf"
+        ];
+      };
 
       # Prune replicated snapshots on backup in the same daily HDD wake window
       backup-snapshot-prune = {
