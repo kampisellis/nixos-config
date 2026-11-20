@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  lib,
+  pkgs,
+  pkgs-unstable,
+  ...
+}:
 
 {
   imports = [
@@ -147,7 +152,7 @@
       ]
     ))
     pcsx2
-
+    pkgs-unstable.antigravity-fhs
     thunderbird
     discord
     jetbrains.clion
