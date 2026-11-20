@@ -127,7 +127,7 @@ in
           onFailure = [ "notify-ntfy@%n.service" ];
           unitConfig = {
             RequiresMountsFor = "/mnt/nas-data";
-            ConditionPathExists = "/mnt/nas-data/Giannis/Site/hugo.toml";
+            ConditionPathExists = "/mnt/nas-data/Giannis/Apps/Site/hugo.toml";
           };
           path = [ pkgs.dart-sass ];
           serviceConfig = {
@@ -142,7 +142,7 @@ in
               (lib.getExe pkgs.hugo)
               "--watch"
               "--noBuildLock"
-              "--source /mnt/nas-data/Giannis/Site"
+              "--source /mnt/nas-data/Giannis/Apps/Site"
               "--destination /var/lib/kampisellis-site/site"
               "--cacheDir /var/cache/kampisellis-hugo"
               "--cleanDestinationDir"
