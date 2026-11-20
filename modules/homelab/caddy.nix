@@ -111,6 +111,46 @@ in
       };
     };
 
-    systemd.services.caddy.onFailure = [ "notify-ntfy@%n.service" ];
+    systemd = {
+      tmpfiles.rules = [
+        "d /var/lib/kampisellis-site 0755 caddy caddy -"
+        "d /var/lib/kampisellis-site/site 0755 ${cfg.user} users -"
+      ];
+
+      services = {
+        caddy.onFailure = [ "notify-ntfy@%n.service" ];
+
+        kampisellis-site-hugo = {
+          description = "Watch and build kampisellis.com Hugo site from NAS";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "local-fs.target" ];
+          onFailure = [ "notify-ntfy@%n.service" ];
+          unitConfig = {
+            RequiresMountsFor = "/mnt/nas-data";
+            ConditionPathExists = "/mnt/nas-data/Giannis/Site/hugo.toml";
+          };
+          path = [ pkgs.dart-sass ];
+          serviceConfig = {
+            Type = "simple";
+            User = cfg.user;
+            Group = "users";
+            UMask = "0022";
+            CacheDirectory = "kampisellis-hugo";
+            Restart = "on-failure";
+            RestartSec = "5s";
+            ExecStart = lib.concatStringsSep " " [
+              (lib.getExe pkgs.hugo)
+              "--watch"
+              "--noBuildLock"
+              "--source /mnt/nas-data/Giannis/Site"
+              "--destination /var/lib/kampisellis-site/site"
+              "--cacheDir /var/cache/kampisellis-hugo"
+              "--cleanDestinationDir"
+              "--minify"
+            ];
+          };
+        };
+      };
+    };
   };
 }
