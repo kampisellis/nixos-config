@@ -39,8 +39,10 @@ in
 
       syncoid = {
         enable = true;
-        # Run once daily right after postgresqlBackup so the backup HDD stays spun down
-        interval = "*-*-* 02:45:00";
+        # Run once daily right after the 03:00 sanoid snapshot (which includes the 02:15 DB dump)
+        # so the backup HDD spins up only once per day.
+        interval = "*-*-* 03:05:00";
+        commonArgs = [ "--no-sync-snap" ];
         commands = {
           "state-backup" = {
             source = "tank/var-lib";
@@ -60,10 +62,10 @@ in
       syncoid-data-backup.onFailure = [ "notify-ntfy@%n.service" ];
       postgresqlBackup-immich.onFailure = [ "notify-ntfy@%n.service" ];
 
-      # Prune replicated @autosnap_ snapshots on backup right after daily syncoid
+      # Prune replicated snapshots on backup in the same daily HDD wake window
       backup-snapshot-prune = {
         description = "Prune old replicated snapshots on backup pool";
-        startAt = "*-*-* 03:15:00";
+        startAt = "*-*-* 03:20:00";
         onFailure = [ "notify-ntfy@%n.service" ];
         path = [
           pkgs.coreutils
