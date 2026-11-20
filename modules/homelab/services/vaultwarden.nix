@@ -16,8 +16,8 @@ in
 
     useUnstable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
-      description = "Keep Vaultwarden on nixpkgs-unstable until stable 26.05 is verified >= running DB schema version.";
+      default = false;
+      description = "Use Vaultwarden from nixpkgs-unstable instead of stable nixpkgs.";
     };
   };
 
@@ -25,7 +25,6 @@ in
     # State directory remains /var/lib/bitwarden_rs (module default)
     services.vaultwarden = {
       enable = true;
-      # Pinned to unstable to prevent SQLite schema downgrade; compare versions in Phase 2 before switching to stable
       package = if svcCfg.useUnstable then pkgs-unstable.vaultwarden else pkgs.vaultwarden;
       dbBackend = "sqlite";
       backupDir = "/var/lib/backup/vaultwarden";

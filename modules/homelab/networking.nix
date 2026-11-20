@@ -70,13 +70,17 @@ in
       ];
 
       # Explicit firewall: no blanket trustedInterfaces on wt0.
-      # Technitium opens 53 (TCP/UDP), 5380, 53443; NetBird opens 51820 (UDP); Samba opens 445/139 (TCP).
+      # DNS (53 TCP/UDP) is open explicitly (Technitium UI is Caddy-only); NetBird opens 51820 (UDP); Samba opens 445/139 (TCP).
       firewall = {
         enable = true;
         allowedTCPPorts = [
           22
+          53
           80
           443
+        ];
+        allowedUDPPorts = [
+          53
         ];
         interfaces.wt0.allowedTCPPorts = [
           cfg.ports.staticSite
@@ -91,7 +95,7 @@ in
           pkgs-unstable.technitium-dns-server
         else
           pkgs.technitium-dns-server;
-      openFirewall = true;
+      openFirewall = false;
     };
 
     systemd.services.technitium-dns-server.onFailure = [ "notify-ntfy@%n.service" ];
@@ -103,7 +107,7 @@ in
       clients.wt0 = {
         port = cfg.ports.netbird;
         interface = "wt0";
-        openFirewall = true;
+        openFirewall = false;
         autoStart = true;
       };
     };
