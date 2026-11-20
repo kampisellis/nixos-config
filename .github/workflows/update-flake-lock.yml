@@ -30,6 +30,21 @@ jobs:
       - name: Verify evaluation after update
         run: nix flake check --no-build --show-trace
 
+      - name: Check formatting and linters
+        run: |
+          nix build \
+            .#checks.x86_64-linux.formatting \
+            .#checks.x86_64-linux.statix \
+            .#checks.x86_64-linux.deadnix \
+            --no-link
+
+      - name: Build custom derivations
+        run: |
+          nix build \
+            .#packages.x86_64-linux.services-table \
+            .#nixosConfigurations.homelab.config.services.caddy.package \
+            --no-link
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:

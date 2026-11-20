@@ -14,7 +14,7 @@ in
     technitium.useUnstable = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Use technitium-dns-server from nixpkgs-unstable (Option A if version >= 15 is needed for legacy v15 configs).";
+      description = "Use technitium-dns-server from nixpkgs-unstable instead of stable nixpkgs.";
     };
 
     netbird = {
@@ -27,7 +27,7 @@ in
       enableLocalRouteFix = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Bridge NetBird netbird-rt-fwd ACL chain into INPUT for local LAN alias IPs (see docs/RUNBOOK.md Section 8 to retire).";
+        description = "Bridge NetBird netbird-rt-fwd ACL chain into INPUT for local LAN alias IPs.";
       };
     };
   };
@@ -117,7 +117,7 @@ in
     # Workaround: VPN peers and the external VPS reach local alias IPs (.101/.105/.109)
     # hosted on this same machine, so packets traverse INPUT instead of FORWARD.
     # Alerts via ntfy if NetBird ever renames its internal nftables chain.
-    # Retire via docs/RUNBOOK.md Section 8 once VPS and NetBird peers target 100.76.70.223 directly.
+    # Can be retired once the external VPS and NetBird peers target the NetBird peer IP directly.
     systemd.services.netbird-local-route-fix = lib.mkIf cfg.netbird.enableLocalRouteFix {
       description = "Bridge NetBird route ACLs (netbird-rt-fwd) into INPUT chain for local server alias IPs";
       after = [ "netbird-wt0.service" ];
@@ -160,7 +160,6 @@ in
         Restart = "always";
         RestartSec = "5s";
         CapabilityBoundingSet = [ "CAP_NET_ADMIN" ];
-        AmbientCapabilities = [ "CAP_NET_ADMIN" ];
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";

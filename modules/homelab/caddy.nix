@@ -29,9 +29,31 @@ let
     '';
 
   generatedHandles = lib.concatStringsSep "\n\n" (lib.mapAttrsToList renderHandle enabledServices);
+
+  invalidServices = lib.attrNames (
+    lib.filterAttrs (
+      _: svc: svc.upstream == null && svc.redirect == null && svc.extraCaddyConfig == null
+    ) enabledServices
+  );
+
+  enabledSubdomains = lib.mapAttrsToList (_: svc: svc.subdomain) enabledServices;
+
+  duplicateSubdomains = lib.unique (
+    lib.filter (sub: lib.count (s: s == sub) enabledSubdomains > 1) enabledSubdomains
+  );
 in
 {
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = invalidServices == [ ];
+        message = "homelab.services entries must set at least one of upstream, redirect, or extraCaddyConfig: ${lib.concatStringsSep ", " invalidServices}";
+      }
+      {
+        assertion = duplicateSubdomains == [ ];
+        message = "homelab.services has duplicate subdomains among enabled services: ${lib.concatStringsSep ", " duplicateSubdomains}";
+      }
+    ];
     # Legacy CV subdomain redirect registered in the same single source of truth
     homelab.services.cv = {
       name = "CV Redirect";
@@ -59,7 +81,6 @@ in
         admin 127.0.0.1:${toString cfg.ports.caddyAdmin}
         servers {
           protocols h1 h2
-          trusted_proxies static private_ranges ${cfg.subnets.netbird}
         }
       '';
 
@@ -78,6 +99,10 @@ in
             dns cloudflare {env.CLOUDFLARE_API_TOKEN}
             resolvers 1.1.1.1 8.8.8.8
           }
+          header {
+            X-Content-Type-Options "nosniff"
+            Referrer-Policy "strict-origin-when-cross-origin"
+          }
           @www host www.${cfg.domain}
           redir @www https://${cfg.domain}{uri} permanent
           encode zstd gzip
@@ -93,7 +118,11 @@ in
             resolvers 1.1.1.1 8.8.8.8
           }
 
-          header X-Robots-Tag "noindex, nofollow, noarchive"
+          header {
+            X-Robots-Tag "noindex, nofollow, noarchive"
+            X-Content-Type-Options "nosniff"
+            Referrer-Policy "strict-origin-when-cross-origin"
+          }
 
           @blocked {
             not client_ip private_ranges ${cfg.subnets.netbird}
@@ -138,6 +167,18 @@ in
             CacheDirectory = "kampisellis-hugo";
             Restart = "on-failure";
             RestartSec = "5s";
+            NoNewPrivileges = true;
+            PrivateTmp = true;
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            ProtectKernelTunables = true;
+            ProtectKernelModules = true;
+            ProtectControlGroups = true;
+            CapabilityBoundingSet = "";
+            ReadWritePaths = [
+              "/var/lib/kampisellis-site/site"
+              "/mnt/nas-data/Giannis/Apps/Site/resources"
+            ];
             ExecStart = lib.concatStringsSep " " [
               (lib.getExe pkgs.hugo)
               "--watch"

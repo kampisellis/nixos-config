@@ -37,6 +37,7 @@
             inherit inputs pkgs-unstable;
           };
           modules = [
+            { nixpkgs.config.allowUnfree = allowUnfree; }
             ./modules/common.nix
           ]
           ++ modules;

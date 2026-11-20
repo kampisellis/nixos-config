@@ -1,7 +1,6 @@
 {
   lib,
   pkgs,
-  pkgs-unstable,
   ...
 }:
 
@@ -11,10 +10,7 @@
   ];
 
   # Allows `nix flake check` to evaluate this host cleanly before hardware-configuration.nix is generated
-  nixpkgs = {
-    hostPlatform = lib.mkDefault "x86_64-linux";
-    config.allowUnfree = true;
-  };
+  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   networking = {
     hostName = "laptop";

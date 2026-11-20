@@ -14,12 +14,12 @@
     # Periodic store deduplication avoids slowing down every build
     optimise = {
       automatic = true;
-      dates = [ "weekly" ];
+      dates = [ "Sun *-*-* 06:00:00" ];
     };
 
     gc = {
       automatic = true;
-      dates = "weekly";
+      dates = "Sun *-*-* 05:00:00";
       options = "--delete-older-than 14d";
     };
   };

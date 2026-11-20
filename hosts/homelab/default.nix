@@ -6,8 +6,7 @@
   homelab = {
     enable = true;
 
-    # Keep Option B (clean Technitium config) by default; set true only if
-    # nixpkgs-unstable provides >= 15 and you choose Option A in docs/RUNBOOK.md.
+    # Track stable nixpkgs for Technitium DNS by default.
     technitium.useUnstable = false;
 
     # Pinned to unstable until stable 26.05 matches the 0.80.x self-hosted NetBird stack.

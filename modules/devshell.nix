@@ -7,13 +7,11 @@ pkgs.mkShell {
     formatterPkg
   ]
   ++ (with pkgs; [
-    age
     deadnix
     git
     just
     nvd
     openssl
-    sops
     statix
   ]);
 

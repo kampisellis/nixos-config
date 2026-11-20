@@ -43,7 +43,7 @@ in
     environment.systemPackages = [ motdScript ];
 
     programs.bash.interactiveShellInit = ''
-      if [ -n "''${SSH_CONNECTION:-}" ] && [ -t 1 ]; then
+      if [ -n "''${SSH_CONNECTION:-}" ] && [ -t 1 ] && [ -z "''${TMUX:-}" ] && [ "''${SHLVL:-1}" -eq 1 ]; then
         ${motdScript}/bin/homelab-motd || true
       fi
     '';

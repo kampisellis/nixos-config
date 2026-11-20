@@ -62,9 +62,12 @@ in
         rcloneConfigFile = "/var/lib/secrets/rclone-backup.conf";
         paths = [
           "/var/lib/backup/postgresql"
-          "/var/lib/vaultwarden"
+          "/var/lib/backup/vaultwarden"
           "/var/lib/radicale"
           "/var/lib/couchdb"
+          "/var/lib/lidarr"
+          "/var/lib/private/uptime-kuma"
+          "/var/lib/private/technitium-dns-server"
           "/var/lib/secrets"
         ];
         timerConfig = {
@@ -89,9 +92,9 @@ in
         after = [ "network-online.target" ];
         wants = [ "network-online.target" ];
         onFailure = [ "notify-ntfy@%n.service" ];
-        unitConfig.ConditionFileNotEmpty = [
-          "/var/lib/secrets/restic.pass"
-          "/var/lib/secrets/rclone-backup.conf"
+        serviceConfig.ExecStartPre = lib.mkBefore [
+          "${pkgs.coreutils}/bin/test -s /var/lib/secrets/restic.pass"
+          "${pkgs.coreutils}/bin/test -s /var/lib/secrets/rclone-backup.conf"
         ];
       };
 
@@ -99,37 +102,62 @@ in
       backup-snapshot-prune = {
         description = "Prune old replicated snapshots on backup pool";
         startAt = "*-*-* 03:20:00";
+        after = [
+          "syncoid-state-backup.service"
+          "syncoid-data-backup.service"
+        ];
         onFailure = [ "notify-ntfy@%n.service" ];
         path = [
           pkgs.coreutils
+          pkgs.findutils
           pkgs.gnugrep
           pkgs.zfs
         ];
         script = ''
-          for ds in backup/var-lib backup/personal-backup; do
-            (zfs list -t snapshot -H -o name -S creation "$ds" | grep '@autosnap_' || true) \
-              | tail -n +36 \
-              | while IFS= read -r snap; do
-                  zfs destroy "$snap"
-                done
-          done
+          set -euo pipefail
+
+          prune_class() {
+            local ds="$1"
+            local class="$2"
+            local keep="$3"
+            local snaps
+
+            snaps="$(zfs list -t snapshot -H -o name -S creation "$ds")"
+            printf '%s\n' "$snaps" \
+              | { grep -E "@autosnap_.*_''${class}$" || true; } \
+              | tail -n +"$((keep + 1))" \
+              | xargs -r -n1 zfs destroy
+          }
+
+          prune_class backup/var-lib hourly 24
+          prune_class backup/var-lib daily 30
+          prune_class backup/var-lib monthly 3
+
+          prune_class backup/personal-backup daily 30
+          prune_class backup/personal-backup monthly 6
         '';
         serviceConfig.Type = "oneshot";
       };
 
-      # Daily unencrypted sync of Immich originals and Documents to Google Drive
+      # Daily unencrypted sync of Immich data, Documents, and Site to Google Drive
       rclone-gdrive-backup = {
-        description = "Sync Immich media and Documents to Google Drive";
+        description = "Sync Immich data, Documents, and Site to Google Drive";
         startAt = "*-*-* 04:00:00";
-        after = [ "network-online.target" ];
+        after = [
+          "network-online.target"
+          "restic-backups-gdrive-system.service"
+        ];
         wants = [ "network-online.target" ];
         onFailure = [ "notify-ntfy@%n.service" ];
-        unitConfig = {
-          RequiresMountsFor = "/mnt/nas-data";
-          ConditionFileNotEmpty = "/var/lib/secrets/rclone-backup.conf";
-        };
-        path = [ pkgs.rclone ];
+        unitConfig.RequiresMountsFor = "/mnt/nas-data";
+        path = [
+          pkgs.coreutils
+          pkgs.rclone
+        ];
         script = ''
+          set -euo pipefail
+
+          TODAY="$(date +%Y-%m-%d)"
           RCLONE_FLAGS=(
             --config=/var/lib/secrets/rclone-backup.conf
             --fast-list
@@ -142,14 +170,36 @@ in
           )
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
-            /mnt/nas-data/Giannis/Apps/Immich/library/admin \
-            gdrive:homelab-backups/media
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-library" \
+            /mnt/nas-data/Giannis/Apps/Immich/library \
+            gdrive:homelab-backups/immich/library
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-upload" \
+            /mnt/nas-data/Giannis/Apps/Immich/upload \
+            gdrive:homelab-backups/immich/upload
+
+          rclone sync "''${RCLONE_FLAGS[@]}" \
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-profile" \
+            /mnt/nas-data/Giannis/Apps/Immich/profile \
+            gdrive:homelab-backups/immich/profile
+
+          rclone sync "''${RCLONE_FLAGS[@]}" \
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/documents" \
             /mnt/nas-data/Giannis/Library/Documents \
             gdrive:homelab-backups/documents
+
+          rclone sync "''${RCLONE_FLAGS[@]}" \
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/site" \
+            /mnt/nas-data/Giannis/Apps/Site \
+            gdrive:homelab-backups/site
         '';
-        serviceConfig.Type = "oneshot";
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = lib.mkBefore [
+            "${pkgs.coreutils}/bin/test -s /var/lib/secrets/rclone-backup.conf"
+          ];
+        };
       };
     };
   };

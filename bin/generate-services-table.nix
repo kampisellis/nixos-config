@@ -3,10 +3,28 @@
 let
   inherit (pkgs) lib;
 
-  enabledServices = lib.filterAttrs (_: svc: svc.enable or true) homelabCfg.services;
+  enabledServices = lib.attrValues (lib.filterAttrs (_: svc: svc.enable or true) homelabCfg.services);
+
+  baseGroups = [
+    "Core & Media"
+    "Infrastructure"
+  ];
+
+  extraGroups = lib.sort (a: b: a < b) (
+    lib.unique (lib.filter (g: !(lib.elem g baseGroups)) (map (svc: svc.group) enabledServices))
+  );
+
+  orderedGroups = baseGroups ++ extraGroups;
+
+  sortedServices = lib.concatMap (
+    groupName:
+    lib.sort (a: b: if a.order != b.order then a.order < b.order else a.name < b.name) (
+      lib.filter (svc: svc.group == groupName) enabledServices
+    )
+  ) orderedGroups;
 
   renderRow =
-    _: svc:
+    svc:
     let
       url = "https://${svc.subdomain}.${homelabCfg.domain}${svc.path or ""}";
       target =
@@ -19,7 +37,7 @@ let
     in
     "| ${svc.name} | `${url}` | `${target}` | ${svc.group} | ${svc.description} |";
 
-  rows = lib.mapAttrsToList renderRow enabledServices;
+  rows = map renderRow sortedServices;
 
   markdown = ''
     # Homelab Services Registry

@@ -64,16 +64,17 @@ sudo mount -t zfs tank/data /mnt/mnt/nas-data
 sudo nixos-generate-config --no-filesystems --root /mnt
 sudo cp /mnt/etc/nixos/hardware-configuration.nix /tmp/hardware-configuration.nix
 sudo rm -f /mnt/etc/nixos/configuration.nix /mnt/etc/nixos/hardware-configuration.nix
-sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos
+sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos
 sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-configuration.nix
 sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
 
 sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab
 ```
 
-After rebooting, recreate local and Samba passwords if `/etc/shadow` was reset:
+After rebooting, restore repository ownership and recreate local and Samba passwords if `/etc/shadow` was reset:
 
 ```bash
+sudo chown -R <USER>:users /etc/nixos
 sudo passwd <USER>
 sudo smbpasswd -a <USER>
 ```
@@ -84,12 +85,12 @@ sudo smbpasswd -a <USER>
 
 Runtime credentials are stored out-of-band in `/var/lib/secrets` (`0700`, `root:root`) and are never committed to Git. When bootstrapping from scratch, provision:
 
-- **Cloudflare DNS-01 token** (`0400`, `root:root`) for Caddy wildcard TLS.
-- **SearXNG secret key** (`0400`, `root:root`, generated via `openssl rand -hex 32`).
-- **NUT upsmon password** (`0440`, `root:nutmon`).
-- **Restic repository password** (`0400`, `root:root`) — keep an offline copy outside the server.
-- **rclone backup config** (`0600`, `root:root`) for offsite Restic and cloud sync.
-- **Optional rclone mount config** (`0400`, `root:root`; an empty file keeps the ROMs mount service disabled).
+- `/var/lib/secrets/caddy.env` (`0400`, `root:root`) — `CLOUDFLARE_API_TOKEN=<TOKEN>` for Caddy wildcard TLS via Cloudflare DNS-01.
+- `/var/lib/secrets/searx.env` (`0400`, `root:root`) — `SEARX_SECRET_KEY=<HEX_KEY>` (generated via `openssl rand -hex 32`) for SearXNG.
+- `/var/lib/secrets/upsmon.pass` (`0440`, `root:nutmon`) — `<UPSMON_PASSWORD>` (single-line password) for NUT `upsmon`.
+- `/var/lib/secrets/restic.pass` (`0400`, `root:root`) — `<RESTIC_PASSWORD>` (single-line passphrase) for the encrypted Restic repository; keep an offline copy outside the server.
+- `/var/lib/secrets/rclone-backup.conf` (`0600`, `root:root`) — rclone configuration defining the `gdrive` remote for offsite Restic and cloud sync.
+- `/var/lib/secrets/rclone.conf` (`0400`, `root:root`) — optional rclone configuration defining the `gdrive-roms-crypt` remote (an empty file keeps `gdrive-roms.service` cleanly skipped).
 
 ---
 
@@ -150,6 +151,16 @@ sudo -u postgres psql -P pager=off -d immich_restore_test -c "SELECT count(*) AS
 sudo -u postgres dropdb --if-exists immich_restore_test
 ```
 
+### Vaultwarden SQLite Backup Verification
+
+Daily consistent SQLite backups are written to `/var/lib/backup/vaultwarden/`. Verify the latest backup passes SQLite integrity checks in read-only mode:
+
+```bash
+LATEST_VW_DB="$(sudo ls -1t /var/lib/backup/vaultwarden/*.sqlite3 | head -n 1)"
+echo "Checking: $LATEST_VW_DB"
+sudo nix-shell -p sqlite --run "sqlite3 -readonly '$LATEST_VW_DB' 'PRAGMA integrity_check;'"
+```
+
 ### Offsite Restic Verification
 
 ```bash
@@ -192,7 +203,7 @@ sudo mount "${DISK}p2" /mnt
 sudo mkdir -p /mnt/boot /mnt/tmp
 sudo mount -o fmask=0077,dmask=0077 "${DISK}p1" /mnt/boot
 
-nix-shell -p git --run "sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos"
+nix-shell -p git --run "sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos"
 sudo nixos-generate-config --root /mnt --show-hardware-config | sudo tee /mnt/etc/nixos/hosts/laptop/hardware-configuration.nix > /dev/null
 sudo TMPDIR=/mnt/tmp nixos-install --root /mnt --flake /mnt/etc/nixos#laptop
 sudo rm -rf /mnt/tmp/*
