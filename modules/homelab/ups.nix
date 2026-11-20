@@ -1,8 +1,48 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.homelab;
   nutGroup = config.power.ups.upsmon.group;
+
+  upsNtfyScript = pkgs.writeShellScript "ups-notify-ntfy" ''
+    notify_type="''${NOTIFYTYPE:-EVENT}"
+    ups_name="''${UPSNAME:-myups}"
+    message="''${1:-UPS event $notify_type on $ups_name}"
+
+    case "$notify_type" in
+      LOWBATT|FSD|SHUTDOWN)
+        priority="urgent"
+        tags="zap,rotating_light"
+        ;;
+      ONBATT|COMMBAD|NOCOMM|REPLBATT)
+        priority="high"
+        tags="battery,warning"
+        ;;
+      ONLINE|COMMOK)
+        priority="default"
+        tags="electric_plug,white_check_mark"
+        ;;
+      *)
+        priority="default"
+        tags="electric_plug"
+        ;;
+    esac
+
+    ${pkgs.curl}/bin/curl \
+      --silent \
+      --show-error \
+      --max-time 10 \
+      -H "Title: UPS [$notify_type] on ${config.networking.hostName}" \
+      -H "Priority: $priority" \
+      -H "Tags: $tags" \
+      -d "$message ($ups_name)" \
+      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
+  '';
 in
 {
   config = lib.mkIf cfg.enable {
@@ -35,12 +75,56 @@ in
         upsmon = "primary";
       };
 
-      upsmon.monitor."myups" = {
-        system = "myups@localhost";
-        powerValue = 1;
-        user = "upsmon";
-        passwordFile = "${cfg.secretsDir}/upsmon.pass";
-        type = "primary";
+      upsmon = {
+        monitor."myups" = {
+          system = "myups@localhost";
+          powerValue = 1;
+          user = "upsmon";
+          passwordFile = "${cfg.secretsDir}/upsmon.pass";
+          type = "primary";
+        };
+
+        settings = {
+          NOTIFYCMD = "${upsNtfyScript}";
+          NOTIFYFLAG = [
+            [
+              "ONLINE"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "ONBATT"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "LOWBATT"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "FSD"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "COMMOK"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "COMMBAD"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "SHUTDOWN"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "REPLBATT"
+              "SYSLOG+EXEC"
+            ]
+            [
+              "NOCOMM"
+              "SYSLOG+EXEC"
+            ]
+          ];
+        };
       };
     };
 
