@@ -83,6 +83,41 @@ in
         '';
         serviceConfig.Type = "oneshot";
       };
+
+      # Daily unencrypted sync of Immich originals and Documents to Google Drive
+      rclone-gdrive-backup = {
+        description = "Sync Immich media and Documents to Google Drive";
+        startAt = "*-*-* 04:00:00";
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
+        onFailure = [ "notify-ntfy@%n.service" ];
+        unitConfig = {
+          RequiresMountsFor = "/mnt/nas-data";
+          ConditionFileNotEmpty = "/var/lib/secrets/rclone-backup.conf";
+        };
+        path = [ pkgs.rclone ];
+        script = ''
+          RCLONE_FLAGS=(
+            --config=/var/lib/secrets/rclone-backup.conf
+            --fast-list
+            --transfers=4
+            --checkers=8
+            --max-delete=200
+            --stats=30s
+            --stats-one-line
+            --log-level=INFO
+          )
+
+          rclone sync "''${RCLONE_FLAGS[@]}" \
+            /mnt/nas-data/Giannis/Apps/Immich/library/admin \
+            gdrive:homelab-backups/media
+
+          rclone sync "''${RCLONE_FLAGS[@]}" \
+            /mnt/nas-data/Giannis/Library/Documents \
+            gdrive:homelab-backups/documents
+        '';
+        serviceConfig.Type = "oneshot";
+      };
     };
   };
 }
