@@ -1,8 +1,8 @@
-# Homelab Operations & Disaster Recovery Runbook
+# Operations & Disaster Recovery Runbook
 
-## 1. Safe Deployment & Emergency Rollback
+## 1. Safe Deployment & Rollback
 
-Always validate and inspect diffs before activating on the headless server:
+Validate and inspect package diffs before activating changes on the headless server:
 
 ```bash
 cd /etc/nixos
@@ -12,26 +12,24 @@ just diff homelab
 just test homelab     # Temporary activation (reverts on reboot)
 ```
 
-Keep your existing SSH session open, verify a second SSH login and core services, then persist:
+Keep the current SSH session open, verify a second SSH login and core services, then persist:
 
 ```bash
 just switch homelab
 ```
 
-### Rollback
-
-- **Live rollback (without reboot):** `sudo nixos-rebuild switch --rollback`
-- **From systemd-boot (physical console):** Select the previous generation (up to 5 are retained on `/boot`).
+- **Live rollback (no reboot):** `sudo nixos-rebuild switch --rollback`
+- **Bootloader rollback:** Select the previous generation in `systemd-boot` (up to 5 generations are retained).
 
 ---
 
-## 2. Bare-Metal Root SSD Recovery (`homelab`)
+## 2. Bare-Metal Boot SSD Recovery (`homelab`)
 
-Use this procedure if the 240GB boot SSD fails while the ZFS pools (`tank`, `backup`) remain intact.
+Use this procedure if the boot SSD fails while the ZFS pools (`tank`, `backup`) remain intact.
 
-### Step 1: Partition & Format ONLY the Replacement Boot SSD
+### Partition & Format Replacement SSD
 
-Verify the target disk via `lsblk -o NAME,SIZE,MODEL,SERIAL` and `/dev/disk/by-id/`. Never touch ZFS pool disks.
+Verify the target device with `lsblk -o NAME,SIZE,MODEL,SERIAL` and `/dev/disk/by-id/`. Never touch ZFS pool disks.
 
 ```bash
 DISK="/dev/disk/by-id/<NEW_BOOT_SSD_ID>"
@@ -45,7 +43,7 @@ sudo mkfs.fat -F 32 -n NIXBOOT "${DISK}-part1"
 sudo mkfs.ext4 -F -L NIXROOT "${DISK}-part2"
 ```
 
-### Step 2: Mount Root, Boot, and Import Existing ZFS Pools
+### Mount Filesystems & Import ZFS Pools
 
 ```bash
 sudo mount /dev/disk/by-label/NIXROOT /mnt
@@ -60,93 +58,44 @@ sudo mount -t zfs tank/var-lib /mnt/var/lib
 sudo mount -t zfs tank/data /mnt/mnt/nas-data
 ```
 
-### Step 3: Clone Repo & Install NixOS
+### Clone & Install
 
 ```bash
 sudo nixos-generate-config --no-filesystems --root /mnt
 sudo cp /mnt/etc/nixos/hardware-configuration.nix /tmp/hardware-configuration.nix
 sudo rm -f /mnt/etc/nixos/configuration.nix /mnt/etc/nixos/hardware-configuration.nix
-sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos
+sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos
 sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-configuration.nix
 sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
 
 sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab
 ```
 
-After rebooting, set user and Samba passwords if `/etc/shadow` was recreated:
+After rebooting, recreate local and Samba passwords if `/etc/shadow` was reset:
 
 ```bash
-sudo passwd gkampisellis
-sudo smbpasswd -a gkampisellis
+sudo passwd <USER>
+sudo smbpasswd -a <USER>
 ```
 
 ---
 
-## 3. Clean Bootstrap of Runtime Credentials & CouchDB
+## 3. Runtime Secrets Bootstrap
 
-If runtime credentials must be recreated from scratch:
+Runtime credentials are stored out-of-band in `/var/lib/secrets` (`0700`, `root:root`) and are never committed to Git. When bootstrapping from scratch, provision:
 
-```bash
-sudo install -d -m 0700 -o root -g root /var/lib/secrets
-
-# 1. Cloudflare DNS-01 API Token (Zone:DNS:Edit)
-printf 'CLOUDFLARE_API_TOKEN=%s\n' '<TOKEN>' | sudo tee /var/lib/secrets/caddy.env > /dev/null
-sudo chmod 0400 /var/lib/secrets/caddy.env
-
-# 2. SearXNG secret key
-printf 'SEARX_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" | sudo tee /var/lib/secrets/searx.env > /dev/null
-sudo chmod 0400 /var/lib/secrets/searx.env
-
-# 3. NUT upsmon password
-printf '%s\n' '<PASSWORD>' | sudo tee /var/lib/secrets/upsmon.pass > /dev/null
-sudo chown root:nutmon /var/lib/secrets/upsmon.pass
-sudo chmod 0440 /var/lib/secrets/upsmon.pass
-
-# 4. Optional rclone config (empty file disables gdrive-roms cleanly)
-sudo touch /var/lib/secrets/rclone.conf
-sudo chmod 0400 /var/lib/secrets/rclone.conf
-```
-
-### Recreating CouchDB `local.ini` (Obsidian LiveSync)
-
-```bash
-sudo tee /var/lib/couchdb/local.ini > /dev/null <<'EOF'
-[couchdb]
-single_node = true
-max_document_size = 50000000
-
-[chttpd]
-require_valid_user = true
-max_http_request_size = 4294967296
-
-[chttpd_auth]
-require_valid_user = true
-authentication_redirect = /_utils/session.html
-
-[httpd]
-WWW-Authenticate = Basic realm="couchdb"
-enable_cors = true
-
-[cors]
-origins = app://obsidian.md,capacitor://localhost,http://localhost
-credentials = true
-headers = accept, authorization, content-type, origin, referer
-methods = GET, PUT, POST, HEAD, DELETE
-max_age = 3600
-
-[admins]
-admin = <SET_NEW_ADMIN_PASSWORD_HERE>
-EOF
-sudo chown couchdb:couchdb /var/lib/couchdb/local.ini
-sudo chmod 0600 /var/lib/couchdb/local.ini
-sudo systemctl restart couchdb
-```
+- **Cloudflare DNS-01 token** (`0400`, `root:root`) for Caddy wildcard TLS.
+- **SearXNG secret key** (`0400`, `root:root`, generated via `openssl rand -hex 32`).
+- **NUT upsmon password** (`0440`, `root:nutmon`).
+- **Restic repository password** (`0400`, `root:root`) — keep an offline copy outside the server.
+- **rclone backup config** (`0600`, `root:root`) for offsite Restic and cloud sync.
+- **Optional rclone mount config** (`0400`, `root:root`; an empty file keeps the ROMs mount service disabled).
 
 ---
 
-## 4. ZFS Maintenance, Snapshots & Syncoid
+## 4. ZFS Maintenance & Syncoid
 
-### Recommended Dataset Properties
+### Dataset Defaults
 
 ```bash
 sudo zfs set atime=off compression=lz4 tank/var-lib
@@ -156,13 +105,13 @@ zfs get atime,compression,recordsize,mountpoint tank/var-lib tank/data
 
 ### Manual Pre-Change Snapshot
 
-Snapshot only `tank` (not `backup` with the same tag) so Syncoid does not hit a duplicate snapshot collision:
+Snapshot only `tank` (avoid creating matching tags manually on `backup` to prevent Syncoid collisions):
 
 ```bash
 sudo zfs snapshot -r "tank@manual-$(date +%Y%m%d-%H%M)"
 ```
 
-If Syncoid ever reports `destination already exists`:
+If Syncoid reports a duplicate snapshot on `backup`:
 
 ```bash
 sudo zfs rename backup/var-lib@<snap> backup/var-lib@local-<snap>
@@ -171,73 +120,62 @@ sudo systemctl start syncoid-state-backup.service
 
 ---
 
-## 5. Updating Caddy Cloudflare Plugin Hash
+## 5. Updating Caddy Plugin Hash
 
-When a `nixpkgs` bump updates Caddy or Go dependencies in `modules/homelab/caddy.nix`:
+When a `nixpkgs` update changes Caddy or Go dependencies in `modules/homelab/caddy.nix`:
 
-1. Run `nixos-rebuild build --flake .#homelab`.
-2. Copy the `got: sha256-...` hash from the fixed-output derivation error into `modules/homelab/caddy.nix`.
-3. Re-run `just lint` and `just diff homelab`.
-
----
-
-## 6. Technitium DNS Policy & MikroTik Fallback
-
-Technitium runs from stable NixOS (`15.6.2+`) with `DynamicUser=yes` (`/var/lib/private/technitium-dns-server`).
-
-- **Local End Points:** `127.0.0.1:53`, `10.10.10.5:53`, `10.10.10.101:53`.
-- **Forwarders:** `1.1.1.1`, `1.0.0.1`.
-- **MikroTik Fallback:** Set DHCP DNS Servers to `10.10.10.101,10.10.10.1`, enable `Allow Remote Requests` on RouterOS (while dropping WAN TCP/UDP 53), and add static fallback entries for `cockpit`, `home`, and `vault` pointing to `10.10.10.105`.
+1. Set `hash = lib.fakeHash;` and run `just build homelab`.
+2. Copy the `got: sha256-...` value from the build error into `modules/homelab/caddy.nix`.
+3. Run `just lint` and `just diff homelab`.
 
 ---
 
-## 7. Immich Database Non-Destructive Restore Drill
+## 6. Backup Verification & Restore Drills
 
-Daily SQL dumps are written to `/var/lib/backup/postgresql/immich.sql.gz` at `02:15`.
+### Immich PostgreSQL Non-Destructive Restore Drill
+
+Daily dumps are written to `/var/lib/backup/postgresql/immich.sql.gz` at `02:15`. Because `pg_dump` includes `\connect immich`, filter everything up to that line so the restore targets only the temporary database:
 
 ```bash
-sudo ls -lh /var/lib/backup/postgresql/
+sudo gzip -t /var/lib/backup/postgresql/immich.sql.gz && echo "gzip OK"
 
 sudo -u postgres dropdb --if-exists immich_restore_test
-sudo -u postgres createdb -O immich immich_restore_test
-sudo bash -c 'zcat /var/lib/backup/postgresql/immich.sql.gz | sudo -u postgres psql -v ON_ERROR_STOP=1 -d immich_restore_test > /dev/null'
+sudo -u postgres createdb -T template0 -E UTF8 -l en_US.UTF-8 -O immich immich_restore_test
 
-sudo -u postgres psql -d immich_restore_test -c "SELECT count(*) AS assets FROM assets; SELECT count(*) AS users FROM users;"
-sudo -u postgres dropdb immich_restore_test
+sudo zcat /var/lib/backup/postgresql/immich.sql.gz \
+  | awk 'found { print } $0 == "\\connect immich" { found = 1 }' \
+  | sudo -u postgres psql -v ON_ERROR_STOP=1 -d immich_restore_test > /dev/null
+
+sudo -u postgres psql -P pager=off -d immich_restore_test -c "SELECT count(*) AS restored_assets FROM asset;"
+sudo -u postgres dropdb --if-exists immich_restore_test
+```
+
+### Offsite Restic Verification
+
+```bash
+sudo restic-gdrive-system snapshots
+sudo restic-gdrive-system check
 ```
 
 ---
 
-## 8. Retiring `netbird-local-route-fix`
+## 7. Controlled UPS Shutdown Test
 
-Once the external VPS and all NetBird peers target `100.76.70.223` directly instead of LAN alias IPs:
-
-1. Point the external VPS upstream for `kampisellis.com` to `100.76.70.223:8085`.
-2. Update NetBird ACLs (TCP/UDP 53, TCP 80/443 for personal peers; TCP 8085 for VPS) and NetBird Nameserver to `100.76.70.223` (adding `100.76.70.223:53` to Technitium Local End Points).
-3. Set `homelab.netbird.enableLocalRouteFix = false;` in `hosts/homelab/default.nix`, test over 4G/5G + public internet, then `just switch homelab`.
-
----
-
-## 9. Controlled UPS Shutdown Test (20% Threshold)
+Verify battery state before triggering a forced shutdown test (confirm BIOS is set to **Restore on AC Power Loss = Power On**):
 
 ```bash
 sudo zfs snapshot -r tank@pre-ups-test
 upsc myups@localhost | grep -E 'battery.charge|ups.status|battery.runtime'
 
-# WARNING: triggers a real graceful OS shutdown — run only when ready to power back on
+# Triggers a real graceful OS shutdown
 sudo upsmon -c fsd
 ```
 
-Confirm in BIOS that **Restore on AC Power Loss = Power On**.
-
 ---
 
-## 10. Clean NixOS 26.05 Install on Laptop (`ASUS TUF FX505DY`)
+## 8. Clean Laptop Install (`laptop`)
 
-Clean GPT layout on `/dev/nvme0n1`:
-
-- `p1`: `1 GiB` FAT32 ESP mounted on `/boot` (label `NIXBOOT`)
-- `p2`: remaining space `ext4` mounted on `/` (label `NIXROOT`)
+GPT layout on `/dev/nvme0n1`: `1 GiB` FAT32 ESP (`NIXBOOT`) mounted at `/boot`, remaining space `ext4` (`NIXROOT`) mounted at `/`.
 
 ```bash
 DISK="/dev/nvme0n1"
@@ -254,9 +192,9 @@ sudo mount "${DISK}p2" /mnt
 sudo mkdir -p /mnt/boot /mnt/tmp
 sudo mount -o fmask=0077,dmask=0077 "${DISK}p1" /mnt/boot
 
-nix-shell -p git --run "sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos"
+nix-shell -p git --run "sudo git clone [https://github.com/kampisellis/nixos-config.git](https://github.com/kampisellis/nixos-config.git) /mnt/etc/nixos"
 sudo nixos-generate-config --root /mnt --show-hardware-config | sudo tee /mnt/etc/nixos/hosts/laptop/hardware-configuration.nix > /dev/null
 sudo TMPDIR=/mnt/tmp nixos-install --root /mnt --flake /mnt/etc/nixos#laptop
 sudo rm -rf /mnt/tmp/*
-sudo nixos-enter --root /mnt -c 'passwd giannis'
+sudo nixos-enter --root /mnt -c 'passwd <USER>'
 ```

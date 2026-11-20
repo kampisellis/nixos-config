@@ -1,96 +1,110 @@
-# NixOS Configuration
+# nixos-config
 
-Flake-based NixOS configuration for my home server (`homelab`) and daily laptop (`laptop`).
+Declarative NixOS flake managing my home server (`homelab`) and daily workstation (`laptop`).
 
 ## Hosts
 
-| Host | Hardware | Role | Release / State |
+| Host | Hardware | Role | Release |
 | --- | --- | --- | --- |
-| `homelab` | Intel Core i3-12100, 240GB SSD + ZFS (`tank`, `backup`), 2.5GbE, PowerWalker VFI 1000 UPS | Headless self-hosted server | NixOS 26.05 (`stateVersion = 25.11`) |
-| `laptop` | ASUS TUF FX505DY (Ryzen 5 3550H + RX 560X) | Daily workstation (KDE Plasma 6 / Wayland) | NixOS 26.05 (`stateVersion = 26.05`) |
+| `homelab` | Intel Core i3-12100, 240 GB boot SSD, ZFS mirror (`tank`) + backup HDD (`backup`), 2.5GbE, PowerWalker UPS | Headless self-hosted server & NAS | NixOS 26.05 (`stateVersion = 25.11`) |
+| `laptop` | ASUS TUF FX505DY (Ryzen 5 3550H, RX 560X) | Daily workstation (KDE Plasma 6 / Wayland) | NixOS 26.05 (`stateVersion = 26.05`) |
 
-## Repository Structure
+## Layout
 
 ```text
 .
-├── flake.nix                  # Inputs (nixos-26.05, unstable), mkHost helper, formatter, checks
-├── justfile                   # Local commands for validation, diff, test, and switch
-├── statix.toml                # Linter configuration
+├── flake.nix                    # Inputs (nixos-26.05, nixpkgs-unstable), host builder, formatter, checks
+├── justfile                     # Validation, diff, test, switch, and update recipes
+├── statix.toml                  # Nix linter rules
 ├── bin/
 │   └── generate-services-table.nix
 ├── docs/
-│   └── RUNBOOK.md             # Recovery, ZFS, backup drills, and host migration procedures
+│   └── RUNBOOK.md               # Recovery, ZFS maintenance, and restore procedures
 ├── hosts/
-│   ├── homelab/               # Server entry point and hardware-configuration.nix
-│   └── laptop/                # Laptop entry point and hardware-configuration.nix
+│   ├── homelab/                 # Server entry point and hardware config
+│   └── laptop/                  # Workstation entry point and hardware config
 └── modules/
-    ├── common.nix             # Shared Nix/Lix settings, locale, timezone, base CLI tools
-    ├── devshell.nix           # Dev shell (just, nvd, statix, deadnix, nixfmt)
+    ├── common.nix               # Shared Nix settings, locale, timezone, base CLI tools
+    ├── devshell.nix             # Dev shell (just, nvd, statix, deadnix, nixfmt)
     └── homelab/
-        ├── options.nix        # Network constants and homelab.services registry
-        ├── base.nix           # Boot, Intel GPU, SSH, Cockpit, zramSwap, ntfy failure alerts
-        ├── networking.nix     # nic0 aliases, firewall, Technitium DNS, NetBird
-        ├── storage.nix        # ZFS mounts, HDD spindown, rclone mount, ZED & smartd alerts
-        ├── backup.nix         # Daily PostgreSQL dumps, Sanoid snapshots, Syncoid replication
-        ├── samba.nix          # SMB3 shares restricted to LAN/VPN subnets
-        ├── ups.nix            # NUT integration and udev rules
-        ├── caddy.nix          # Cloudflare DNS-01 wildcard reverse proxy + static site
-        ├── homepage.nix       # Dashboard generated from homelab.services
-        ├── motd.nix           # Login summary (uptime, load, failed units, ZFS health)
-        └── services/          # One self-contained module per service
+        ├── options.nix          # Shared options and service registry schema
+        ├── base.nix             # Boot, Intel GPU, SSH, Cockpit, zramSwap, failure alerts
+        ├── networking.nix       # Interface aliases, firewall, Technitium DNS, NetBird
+        ├── storage.nix          # ZFS mounts, HDD spindown, rclone mount, ZED & smartd
+        ├── backup.nix           # PostgreSQL dumps, Sanoid, Syncoid, Restic, and rclone sync
+        ├── samba.nix            # SMB3 shares restricted to LAN and VPN subnets
+        ├── ups.nix              # NUT monitoring, udev rules, and power event alerts
+        ├── caddy.nix            # Cloudflare DNS-01 reverse proxy + native Hugo site builder
+        ├── homepage.nix         # Dashboard generated from the service registry
+        ├── motd.nix             # SSH login summary (uptime, load, failed units, ZFS health)
+        └── services/            # One self-contained module per application
 ```
 
-## How the Server Is Built
+## Design & Architecture
 
 ### Single Service Registry
 
-Every web service is declared once under `homelab.services` in `modules/homelab/options.nix`. From that attribute set, the configuration automatically generates:
+Web applications are declared once under `homelab.services`. From that definition, Nix generates:
 
-- Caddy virtual hosts and reverse-proxy rules (`modules/homelab/caddy.nix`)
-- Homepage dashboard categories and links (`modules/homelab/homepage.nix`)
+- Reverse-proxy handles in Caddy (`modules/homelab/caddy.nix`)
+- Dashboard entries in Homepage (`modules/homelab/homepage.nix`)
 - A Markdown overview table via `just services-table`
 
-### Channel & Pinning Policy
+Adding a new service means adding a module under `modules/homelab/services/`, registering it in `homelab.services`, and importing it in `modules/homelab/default.nix`.
 
-Both hosts track `nixos-26.05` by default. `nixpkgs-unstable` is exposed via `pkgs-unstable` and used selectively only where a service requires a newer build (currently Immich for database compatibility and NetBird to stay in sync with peers). Weekly GitHub Actions PRs update only the stable `nixpkgs` input so database-backed services are never bumped unexpectedly.
+### Pinning & Updates
 
-### Networking
+Both hosts track `nixos-26.05`. `nixpkgs-unstable` is exposed separately as `pkgs-unstable` and used only for packages that need newer releases (currently Immich and NetBird). `just update` bumps only the stable `nixpkgs` input and prints a package diff via `nvd` without switching; `just update-unstable` is run manually when inspecting database-backed services.
 
-The server uses a single 2.5GbE interface (`nic0`) with dedicated LAN aliases on `10.10.10.0/24`:
+### Networking & Access Control
 
-| Address | Role |
-| --- | --- |
-| `10.10.10.5` | Host management and SSH |
-| `10.10.10.101` | Technitium DNS (`:53`, `:5380`) |
-| `10.10.10.105` | Caddy wildcard reverse proxy (`:80`, `:443`) |
-| `10.10.10.109` | Internal static Hugo site (`:8085`), fronted by an external VPS over NetBird |
+The server runs on a single 2.5GbE interface with dedicated LAN IP aliases separating host management, DNS (Technitium), the reverse proxy (Caddy), and the internal static site listener.
 
-Internal admin tools such as Cockpit bind strictly to `127.0.0.1` and are exposed only through Caddy.
+- TLS certificates are issued via Cloudflare DNS-01 without exposing internal services directly to the public internet.
+- Private subdomains are restricted in Caddy to LAN and NetBird VPN ranges.
+- Local admin interfaces bind to loopback only.
+- The public static site is built natively on the host by a Hugo watcher service and served through an external VPS over NetBird.
 
-### Storage, Backups & Health
+### Storage & Backups
 
-- **OS disk (`240GB SSD`):** `/boot` (`NIXBOOT`, FAT32) and `/` (`NIXROOT`, ext4).
-- **Primary pool (`tank`):** `tank/var-lib` mounted on `/var/lib` (`neededForBoot`) for service state and databases; `tank/data` mounted on `/mnt/nas-data` for NAS files and Immich media.
-- **Backup pool (`backup`):** 1TB SATA HDD that spins down after 15 minutes of inactivity. `sanoid` manages snapshots on `tank`, `syncoid` replicates `var-lib` and `data` to `backup`, and PostgreSQL dumps run daily at `02:15`.
-- **Monitoring & UPS:** `smartd`, ZFS ZED, and systemd `OnFailure` hooks send alerts to local `ntfy`. NUT monitors the PowerWalker UPS and initiates a clean shutdown at 20% battery.
+- **OS disk:** Separate boot SSD (`FAT32` ESP + `ext4` root), keeping OS state decoupled from data pools.
+- **Primary pool (`tank`):** ZFS mirror split between service state/databases and NAS data.
+- **Local backup pool (`backup`):** Single SATA HDD configured to spin down when idle. All local replication and snapshot pruning runs in a single nightly window so the drive wakes up once per day.
+- **Offsite backups:** Critical application state, databases, and runtime secrets are backed up daily with Restic (encrypted). Media and documents are synced separately to cloud storage with a delete-limit safeguard.
+
+Nightly backup sequence:
+
+1. `02:15` — PostgreSQL dump of the Immich database.
+2. `03:00` — Scheduled `sanoid` snapshots on `tank`.
+3. `03:05` — `syncoid` replication from `tank` to `backup`.
+4. `03:20` — Pruning of older replicated snapshots on `backup`.
+5. `03:45` — Encrypted offsite Restic backup of databases, app state, and secrets.
+6. `04:00` — Offsite `rclone` sync of media and documents.
+
+### Monitoring, Power & Secrets
+
+- `smartd`, ZFS ZED, NUT UPS power events (`ONBATT`, `ONLINE`, `LOWBATT`), and systemd `OnFailure` hooks push alerts to a local `ntfy` instance.
+- NUT monitors the UPS and initiates a graceful shutdown at 20% battery.
+- Runtime credentials never enter Git or the Nix store; they are provisioned out-of-band in a root-only directory on the host.
 
 ## Workflow
 
 ```bash
-# Enter dev shell with linters and helper tools
+# Enter dev shell with formatting and lint tools
 nix develop
 
-# Evaluate all hosts and run formatting/lint checks
+# Format, evaluate all hosts, and run statix + deadnix
+just fmt
 just check
 just lint
 
-# Build and inspect package changes without activating
+# Build and inspect package diffs without activating
 just diff homelab
 
 # Test live (reverts automatically on reboot)
 just test homelab
 
-# Persist configuration to bootloader
+# Persist to bootloader
 just switch homelab
 
 # Update stable nixpkgs only and review the diff
@@ -100,4 +114,4 @@ just update homelab
 just services-table
 ```
 
-Disaster recovery, ZFS maintenance, backup restore drills, and laptop migration notes live in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+Operational and recovery procedures are documented in [docs/RUNBOOK.md](docs/RUNBOOK.md).
