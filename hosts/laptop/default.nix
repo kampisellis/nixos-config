@@ -152,11 +152,11 @@
       ]
     ))
     pcsx2
-    pkgs-unstable.antigravity-fhs
     thunderbird
     discord
     jetbrains.clion
     vscode
+    (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
     chromium
     element-desktop
     firefox
