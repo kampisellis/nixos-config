@@ -138,9 +138,9 @@ in
         serviceConfig.Type = "oneshot";
       };
 
-      # Daily unencrypted sync of Immich data, Documents, and Site to Google Drive
+      # Daily unencrypted sync of Immich media, Documents, and Site to Google Drive
       rclone-gdrive-backup = {
-        description = "Sync Immich data, Documents, and Site to Google Drive";
+        description = "Sync Immich media, Documents, and Site to Google Drive";
         startAt = "*-*-* 04:00:00";
         after = [
           "network-online.target"
@@ -169,19 +169,9 @@ in
           )
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
-            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-library" \
-            /mnt/nas-data/Giannis/Apps/Immich/library \
-            gdrive:homelab-backups/immich/library
-
-          rclone sync "''${RCLONE_FLAGS[@]}" \
-            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-upload" \
-            /mnt/nas-data/Giannis/Apps/Immich/upload \
-            gdrive:homelab-backups/immich/upload
-
-          rclone sync "''${RCLONE_FLAGS[@]}" \
-            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/immich-profile" \
-            /mnt/nas-data/Giannis/Apps/Immich/profile \
-            gdrive:homelab-backups/immich/profile
+            --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/media" \
+            /mnt/nas-data/Giannis/Apps/Immich/library/admin \
+            gdrive:homelab-backups/media
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
             --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/documents" \
