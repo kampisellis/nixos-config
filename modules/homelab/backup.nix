@@ -1,4 +1,9 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.homelab;
@@ -34,6 +39,8 @@ in
 
       syncoid = {
         enable = true;
+        # Run once daily right after postgresqlBackup so the backup HDD stays spun down
+        interval = "*-*-* 02:45:00";
         commands = {
           "state-backup" = {
             source = "tank/var-lib";
@@ -52,6 +59,28 @@ in
       syncoid-state-backup.onFailure = [ "notify-ntfy@%n.service" ];
       syncoid-data-backup.onFailure = [ "notify-ntfy@%n.service" ];
       postgresqlBackup-immich.onFailure = [ "notify-ntfy@%n.service" ];
+
+      # Prune replicated @autosnap_ snapshots on backup right after daily syncoid
+      backup-snapshot-prune = {
+        description = "Prune old replicated snapshots on backup pool";
+        startAt = "*-*-* 03:15:00";
+        onFailure = [ "notify-ntfy@%n.service" ];
+        path = [
+          pkgs.coreutils
+          pkgs.gnugrep
+          pkgs.zfs
+        ];
+        script = ''
+          for ds in backup/var-lib backup/personal-backup; do
+            (zfs list -t snapshot -H -o name -S creation "$ds" | grep '@autosnap_' || true) \
+              | tail -n +36 \
+              | while IFS= read -r snap; do
+                  zfs destroy "$snap"
+                done
+          done
+        '';
+        serviceConfig.Type = "oneshot";
+      };
     };
   };
 }
