@@ -182,5 +182,18 @@
     testdisk
   ];
 
+  system.autoUpgrade = {
+    enable = true;
+    flake = "github:kampisellis/nixos-config#laptop";
+    flags = [ "--refresh" ];
+    dates = "Tue *-*-* 12:00:00";
+    operation = "boot";
+    allowReboot = false;
+    persistent = true;
+    randomizedDelaySec = "30min";
+  };
+
+  systemd.services.nixos-upgrade.unitConfig.ConditionACPower = true;
+
   system.stateVersion = "26.05";
 }

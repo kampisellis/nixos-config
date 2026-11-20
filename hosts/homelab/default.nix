@@ -28,10 +28,21 @@
     radicale.enable = true;
     couchdb.enable = true;
     lidarr.enable = true;
-    uptime-kuma.enable = true;
     ntfy.enable = true;
     searxng.enable = true;
   };
+
+  system.autoUpgrade = {
+    enable = true;
+    flake = "github:kampisellis/nixos-config#homelab";
+    flags = [ "--refresh" ];
+    dates = "Tue *-*-* 05:30:00";
+    operation = "switch";
+    allowReboot = false;
+    randomizedDelaySec = "15min";
+  };
+
+  systemd.services.nixos-upgrade.onFailure = [ "notify-ntfy@%n.service" ];
 
   # Fixed to the NixOS release originally installed on this host — NEVER change on upgrades.
   system.stateVersion = "25.11";

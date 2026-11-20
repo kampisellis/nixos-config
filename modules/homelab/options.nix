@@ -188,12 +188,6 @@ in
         description = "Internal loopback port for Lidarr.";
       };
 
-      uptimeKuma = mkOption {
-        type = types.port;
-        default = 3001;
-        description = "Internal loopback port for Uptime Kuma.";
-      };
-
       ntfy = mkOption {
         type = types.port;
         default = 5055;

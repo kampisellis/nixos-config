@@ -66,7 +66,6 @@ in
           "/var/lib/radicale"
           "/var/lib/couchdb"
           "/var/lib/lidarr"
-          "/var/lib/private/uptime-kuma"
           "/var/lib/private/technitium-dns-server"
           "/var/lib/secrets"
         ];

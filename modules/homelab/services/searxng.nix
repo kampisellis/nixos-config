@@ -1,7 +1,7 @@
 {
   config,
   lib,
-  pkgs,
+  pkgs-unstable,
   ...
 }:
 
@@ -17,7 +17,7 @@ in
   config = lib.mkIf (cfg.enable && svcCfg.enable) {
     services.searx = {
       enable = true;
-      package = pkgs.searxng;
+      package = pkgs-unstable.searxng;
       redisCreateLocally = true;
       # Out-of-repo secret file containing SEARX_SECRET_KEY=<64-hex-chars>
       environmentFile = "${cfg.secretsDir}/searx.env";
@@ -26,7 +26,28 @@ in
           bind_address = "127.0.0.1";
           port = cfg.ports.searxng;
           secret_key = "@SEARX_SECRET_KEY@";
+          base_url = "https://search.${cfg.domain}/";
+          limiter = false;
         };
+
+        engines = [
+          {
+            name = "google";
+            disabled = false;
+          }
+          {
+            name = "bing";
+            disabled = false;
+          }
+          {
+            name = "qwant";
+            disabled = false;
+          }
+          {
+            name = "wikipedia";
+            disabled = false;
+          }
+        ];
       };
     };
 

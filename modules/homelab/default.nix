@@ -15,7 +15,6 @@
     ./services/radicale.nix
     ./services/couchdb.nix
     ./services/lidarr.nix
-    ./services/uptime-kuma.nix
     ./services/ntfy.nix
     ./services/searxng.nix
   ];
