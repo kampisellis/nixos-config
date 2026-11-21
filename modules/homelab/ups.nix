@@ -131,7 +131,6 @@ in
     homelab.services.ups = {
       name = "PowerWalker UPS";
       subdomain = "ups";
-      path = "/if/login";
       group = "Infrastructure";
       icon = "mdi-battery-charging";
       description = "UPS IoT Portal";
