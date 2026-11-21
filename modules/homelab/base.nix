@@ -12,13 +12,17 @@ in
   config = lib.mkIf cfg.enable {
     # Bootloader & headless boot safety
     boot = {
+      # Prevent Intel OC Watchdog from claiming /dev/watchdog0 over iTCO_wdt
+      blacklistedKernelModules = [ "intel_oc_wdt" ];
+
       loader = {
         systemd-boot = {
           enable = true;
           # Safe generation cap for the 510 MB EFI System Partition
           configurationLimit = 5;
         };
-        efi.canTouchEfiVariables = true;
+        # Gigabyte B660M DS3H DDR4 NVRAM writes trigger BIOS "Boot failure detected"
+        efi.canTouchEfiVariables = false;
       };
     };
 
