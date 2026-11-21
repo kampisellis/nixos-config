@@ -33,10 +33,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    # Pin Realtek RTL8125 2.5GbE (MAC d8:5e:d3:9c:11:15) to deterministic name "nic0"
+    # Pin Realtek RTL8125 2.5GbE (MAC d8:5e:d3:9c:11:15) to deterministic name "nic0" with Wake-on-LAN
     systemd.network.links."10-nic0" = {
       matchConfig.MACAddress = "d8:5e:d3:9c:11:15";
-      linkConfig.Name = "nic0";
+      linkConfig = {
+        Name = "nic0";
+        WakeOnLan = "magic";
+      };
     };
 
     networking = {
