@@ -20,11 +20,6 @@ in
         };
         efi.canTouchEfiVariables = true;
       };
-
-      # Pin scripted stage-1 initrd across the 25.11 -> 26.05 upgrade on this
-      # headless ZFS server. NixOS 26.05 defaults this to true; test systemd
-      # initrd only with physical console access.
-      initrd.systemd.enable = false;
     };
 
     systemd.settings.Manager.RuntimeWatchdogSec = "30s";

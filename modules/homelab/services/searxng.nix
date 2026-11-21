@@ -32,20 +32,40 @@ in
 
         engines = [
           {
-            name = "google";
-            disabled = false;
-          }
-          {
             name = "bing";
             disabled = false;
           }
           {
-            name = "qwant";
+            name = "duckduckgo";
+            disabled = false;
+          }
+          {
+            name = "brave";
             disabled = false;
           }
           {
             name = "wikipedia";
             disabled = false;
+          }
+          {
+            name = "google";
+            disabled = true;
+          }
+          {
+            name = "qwant";
+            disabled = true;
+          }
+          {
+            name = "wikidata";
+            disabled = true;
+          }
+          {
+            name = "ahmia";
+            disabled = true;
+          }
+          {
+            name = "torch";
+            disabled = true;
           }
         ];
       };
