@@ -21,6 +21,17 @@ just switch homelab
 - **Live rollback (no reboot):** `sudo nixos-rebuild switch --rollback`
 - **Bootloader rollback:** Select the previous generation in `systemd-boot` (up to 5 generations are retained).
 
+### Headless Gigabyte B660M DS3H DDR4 Safeguards & Wake-on-LAN
+
+- **EFI NVRAM lockout protection:** `boot.loader.efi.canTouchEfiVariables = false;` is required on the Gigabyte B660M DS3H DDR4 (boot via the board's `UEFI OS` fallback entry). **Never** run `bootctl` or enable EFI variable writes, as NVRAM writes trigger BIOS `"Boot failure detected"` lockouts.
+- **Watchdog:** `intel_oc_wdt` is blacklisted so `iTCO_wdt` reliably owns `/dev/watchdog0` (`RuntimeWatchdogSec = "30s"`).
+- **Accidental power/sleep guard:** `services.logind` ignores `HandlePowerKey`, `HandleSuspendKey`, and `HandleHibernateKey`.
+- **Wake-on-LAN recovery (`nic0`):** `WakeOnLan=magic` is pinned in `10-nic0.link` (`MAC d8:5e:d3:9c:11:15`). To wake `homelab` remotely from the MikroTik router:
+  ```routeros
+  /tool wol interface=bridge mac=D8:5E:D3:9C:11:15
+  ```
+- **Automated updates:** `system.autoUpgrade` pulls `github:kampisellis/nixos-config` weekly (`homelab` Tue `05:30` `switch`, `laptop` Tue `12:00` `boot` on AC power, `allowReboot = false`).
+
 ---
 
 ## 2. Bare-Metal Boot SSD Recovery (`homelab`)

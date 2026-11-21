@@ -54,14 +54,14 @@ Adding a new service means adding a module under `modules/homelab/services/`, re
 
 ### Pinning & Updates
 
-Both hosts track `nixos-26.05`. `nixpkgs-unstable` is exposed separately as `pkgs-unstable` and used only for packages that need newer releases (currently Immich and NetBird). `just update` bumps only the stable `nixpkgs` input and prints a package diff via `nvd` without switching; `just update-unstable` is run manually when inspecting database-backed services.
+Both hosts track `nixos-26.05`. `nixpkgs-unstable` is exposed separately as `pkgs-unstable` and used only for packages that need newer releases (currently Immich, NetBird, and SearXNG). A weekly GitHub Actions workflow (`update-flake-lock.yml`) opens a validated PR for stable `nixpkgs` updates; both hosts also run `system.autoUpgrade` weekly (`homelab` Tuesdays `05:30` `switch`, `laptop` Tuesdays `12:00` `boot` on AC power, with `allowReboot = false`). `just update` bumps only the stable `nixpkgs` input and prints a package diff via `nvd` without switching; `just update-unstable` is run manually when inspecting database-backed services.
 
 ### Networking & Access Control
 
-The server runs on a single 2.5GbE interface with dedicated LAN IP aliases separating host management, DNS (Technitium), the reverse proxy (Caddy), and the internal static site listener.
+The server runs on a single 2.5GbE interface (`nic0`, Wake-on-LAN enabled) with dedicated LAN IP aliases separating host management, DNS (Technitium), the reverse proxy (Caddy), and the internal static site listener.
 
 - TLS certificates are issued via Cloudflare DNS-01 without exposing internal services directly to the public internet.
-- Private subdomains are restricted in Caddy to LAN and NetBird VPN ranges.
+- Private subdomains (including LAN infrastructure proxies for MikroTik, Ubiquiti Switch, ZTE AP, ZTE 5G CPE, and PowerWalker UPS) are restricted in Caddy to LAN and NetBird VPN ranges.
 - Local admin interfaces bind to loopback only.
 - The public static site is built natively on the host by a Hugo watcher service and served through an external VPS over NetBird.
 
@@ -70,21 +70,23 @@ The server runs on a single 2.5GbE interface with dedicated LAN IP aliases separ
 - **OS disk:** Separate boot SSD (`FAT32` ESP + `ext4` root), keeping OS state decoupled from data pools.
 - **Primary pool (`tank`):** ZFS mirror split between service state/databases and NAS data.
 - **Local backup pool (`backup`):** Single SATA HDD configured to spin down when idle. All local replication and snapshot pruning runs in a single nightly window so the drive wakes up once per day.
-- **Offsite backups:** Critical application state, databases, and runtime secrets are backed up daily with Restic (encrypted). Media and documents are synced separately to cloud storage with a delete-limit safeguard.
+- **Offsite backups:** Critical application state, databases, and runtime secrets are backed up daily with Restic (encrypted). Media, documents, and site source are synced separately to cloud storage with a delete-limit safeguard and dated `--backup-dir` trash.
 
 Nightly backup sequence:
 
-1. `02:15` — PostgreSQL dump of the Immich database.
-2. `03:00` — Scheduled `sanoid` snapshots on `tank`.
-3. `03:05` — `syncoid` replication from `tank` to `backup`.
-4. `03:20` — Pruning of older replicated snapshots on `backup`.
-5. `03:45` — Encrypted offsite Restic backup of databases, app state, and secrets.
-6. `04:00` — Offsite `rclone` sync of media and documents.
+1. `23:00` — Consistent Vaultwarden SQLite backup to `/var/lib/backup/vaultwarden`.
+2. `02:15` — PostgreSQL dump of the Immich database.
+3. `03:00` — Scheduled `sanoid` snapshots on `tank`.
+4. `03:05` — `syncoid` replication from `tank` to `backup`.
+5. `03:20` — Per-class pruning of older replicated snapshots on `backup`.
+6. `03:45` — Encrypted offsite Restic backup of databases, app state, and secrets.
+7. `04:00` — Offsite `rclone` sync of Immich media, documents, and Hugo site source.
 
 ### Monitoring, Power & Secrets
 
 - `smartd`, ZFS ZED, NUT UPS power events (`ONBATT`, `ONLINE`, `LOWBATT`), and systemd `OnFailure` hooks push alerts to a local `ntfy` instance.
 - NUT monitors the UPS and initiates a graceful shutdown at 20% battery.
+- Headless Gigabyte B660M DS3H DDR4 safeguards keep `boot.loader.efi.canTouchEfiVariables = false`, blacklist `intel_oc_wdt` (so `iTCO_wdt` owns `/dev/watchdog0`), ignore physical power/sleep key presses in `logind.conf`, and enable Wake-on-LAN (`magic`) on `nic0`.
 - Runtime credentials never enter Git or the Nix store; they are provisioned out-of-band in a root-only directory on the host.
 
 ## Workflow
