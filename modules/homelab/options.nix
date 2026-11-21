@@ -135,12 +135,6 @@ in
         default = "10.10.10.1";
         description = "MikroTik LAN default gateway IPv4 address.";
       };
-
-      netbirdPeer = mkOption {
-        type = types.str;
-        default = "100.76.70.223";
-        description = "NetBird peer IPv4 address assigned to this server.";
-      };
     };
 
     subnets = {

@@ -31,6 +31,10 @@ in
       order = 30;
     };
 
-    systemd.services.couchdb.onFailure = [ "notify-ntfy@%n.service" ];
+    systemd.services.couchdb = {
+      # epmd is spawned by CouchDB itself; keep it on loopback instead of 0.0.0.0
+      environment.ERL_EPMD_ADDRESS = "127.0.0.1";
+      onFailure = [ "notify-ntfy@%n.service" ];
+    };
   };
 }

@@ -32,7 +32,7 @@ Declarative NixOS flake managing my home server (`homelab`) and daily workstatio
         ├── networking.nix       # Interface aliases, firewall, Technitium DNS, NetBird
         ├── storage.nix          # ZFS mounts, HDD spindown, rclone mount, ZED & smartd
         ├── backup.nix           # PostgreSQL dumps, Sanoid, Syncoid, Restic, and rclone sync
-        ├── samba.nix            # SMB3 shares restricted to LAN and VPN subnets
+        ├── samba.nix            # SMB3-only shares (no NetBIOS) restricted to LAN and VPN subnets
         ├── ups.nix              # NUT monitoring, udev rules, and power event alerts
         ├── caddy.nix            # Cloudflare DNS-01 reverse proxy + native Hugo site builder
         ├── homepage.nix         # Dashboard generated from the service registry
@@ -70,9 +70,9 @@ The server runs on a single 2.5GbE interface (`nic0`, Wake-on-LAN enabled) with 
 - **OS disk:** Separate boot SSD (`FAT32` ESP + `ext4` root), keeping OS state decoupled from data pools.
 - **Primary pool (`tank`):** ZFS mirror split between service state/databases and NAS data.
 - **Local backup pool (`backup`):** Single SATA HDD configured to spin down when idle. All local replication and snapshot pruning runs in a single nightly window so the drive wakes up once per day.
-- **Offsite backups:** Critical application state, databases, and runtime secrets are backed up daily with Restic (encrypted). Media, documents, and site source are synced separately to cloud storage with a delete-limit safeguard and dated `--backup-dir` trash.
+- **Offsite backups:** Critical application state, databases, NixOS uid/gid maps, and runtime secrets are backed up daily with Restic (encrypted). Media, documents, and site source are synced separately to cloud storage with a delete-limit safeguard and a dated `--backup-dir` trash that expires after 30 days.
 
-Nightly backup sequence:
+Nightly backup sequence (all timers are persistent, so jobs missed while the server was off run at the next boot):
 
 1. `23:00` — Consistent Vaultwarden SQLite backup to `/var/lib/backup/vaultwarden`.
 2. `02:15` — PostgreSQL dump of the Immich database.

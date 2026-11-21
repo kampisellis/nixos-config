@@ -12,7 +12,7 @@
       nixpkgs,
       nixpkgs-unstable,
       ...
-    }@inputs:
+    }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -34,7 +34,7 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit inputs pkgs-unstable;
+            inherit pkgs-unstable;
           };
           modules = [
             { nixpkgs.config.allowUnfree = allowUnfree; }

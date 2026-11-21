@@ -29,6 +29,9 @@ in
             autoprune = true;
           };
           "tank/data" = {
+            # Explicit (sanoid's default template would otherwise apply 48 silently);
+            # mirrored by backup-snapshot-prune on backup/personal-backup.
+            hourly = 48;
             daily = 30;
             monthly = 6;
             autosnap = true;
@@ -67,6 +70,8 @@ in
           "/var/lib/couchdb"
           "/var/lib/lidarr"
           "/var/lib/private/technitium-dns-server"
+          # Static uid/gid allocations so restored file ownership matches after a full rebuild
+          "/var/lib/nixos"
           cfg.secretsDir
         ];
         timerConfig = {
@@ -81,6 +86,20 @@ in
       };
     };
 
+    # Catch up on missed nightly jobs at the next boot (e.g. after a UPS shutdown)
+    systemd.timers =
+      lib.genAttrs
+        [
+          "postgresqlBackup-immich"
+          "syncoid-state-backup"
+          "syncoid-data-backup"
+          "backup-snapshot-prune"
+          "rclone-gdrive-backup"
+        ]
+        (_: {
+          timerConfig.Persistent = true;
+        });
+
     systemd.services = {
       sanoid.onFailure = [ "notify-ntfy@%n.service" ];
       syncoid-state-backup.onFailure = [ "notify-ntfy@%n.service" ];
@@ -88,7 +107,11 @@ in
       postgresqlBackup-immich.onFailure = [ "notify-ntfy@%n.service" ];
 
       restic-backups-gdrive-system = {
-        after = [ "network-online.target" ];
+        after = [
+          "network-online.target"
+          "postgresqlBackup-immich.service"
+          "backup-vaultwarden.service"
+        ];
         wants = [ "network-online.target" ];
         onFailure = [ "notify-ntfy@%n.service" ];
         serviceConfig.ExecStartPre = lib.mkBefore [
@@ -132,6 +155,7 @@ in
           prune_class backup/var-lib daily 30
           prune_class backup/var-lib monthly 3
 
+          prune_class backup/personal-backup hourly 48
           prune_class backup/personal-backup daily 30
           prune_class backup/personal-backup monthly 6
         '';
@@ -182,6 +206,20 @@ in
             --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/site" \
             /mnt/nas-data/Giannis/Apps/Site \
             gdrive:homelab-backups/site
+
+          # Expire dated trash folders older than 30 days (by folder name, since moved
+          # files keep their original modification times)
+          CUTOFF="$(date -d '30 days ago' +%Y-%m-%d)"
+          { rclone lsf --config=${cfg.secretsDir}/rclone-backup.conf --dirs-only \
+              gdrive:homelab-backups/_deleted 2>/dev/null || true; } \
+            | while IFS= read -r dir; do
+                dir="''${dir%/}"
+                if [[ "$dir" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$dir" < "$CUTOFF" ]]; then
+                  echo "Purging expired trash folder: $dir"
+                  rclone purge --config=${cfg.secretsDir}/rclone-backup.conf \
+                    "gdrive:homelab-backups/_deleted/$dir"
+                fi
+              done
         '';
         serviceConfig = {
           Type = "oneshot";

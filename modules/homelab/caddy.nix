@@ -118,10 +118,11 @@ in
             resolvers 1.1.1.1 8.8.8.8
           }
 
+          # "?" only sets a header when the upstream did not already send it (avoids duplicates)
           header {
             X-Robots-Tag "noindex, nofollow, noarchive"
-            X-Content-Type-Options "nosniff"
-            Referrer-Policy "strict-origin-when-cross-origin"
+            ?X-Content-Type-Options "nosniff"
+            ?Referrer-Policy "strict-origin-when-cross-origin"
           }
 
           @blocked {

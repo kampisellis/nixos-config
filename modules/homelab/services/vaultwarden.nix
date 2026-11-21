@@ -22,7 +22,8 @@ in
   };
 
   config = lib.mkIf (cfg.enable && svcCfg.enable) {
-    # State directory remains /var/lib/bitwarden_rs (module default)
+    # State directory is /var/lib/vaultwarden (module default); backup-vaultwarden writes
+    # a consistent SQLite copy plus RSA keys to backupDir nightly for Restic.
     services.vaultwarden = {
       enable = true;
       package = if svcCfg.useUnstable then pkgs-unstable.vaultwarden else pkgs.vaultwarden;

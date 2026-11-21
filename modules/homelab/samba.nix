@@ -8,10 +8,14 @@ in
     services.samba = {
       enable = true;
       openFirewall = true;
+      # SMB3-only: NetBIOS name service (nmbd, UDP 137/138) and TCP 139 are unnecessary
+      nmbd.enable = false;
       settings = {
         global = {
           security = "user";
           "server min protocol" = "SMB3";
+          "disable netbios" = "yes";
+          "smb ports" = "445";
           "hosts allow" = "${cfg.subnets.lan} ${cfg.subnets.netbird} 127.0.0.1";
           "hosts deny" = "0.0.0.0/0";
           "invalid users" = [ "root" ];

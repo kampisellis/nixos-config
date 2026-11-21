@@ -15,6 +15,11 @@ in
       # Keep explicitly set: NixOS module defaults to /var/lib/lidarr/.config/Lidarr,
       # whereas migrated state from Proxmox LXC resides directly in /var/lib/lidarr.
       dataDir = "/var/lib/lidarr";
+      # Bind to loopback behind Caddy and follow the shared port registry
+      settings.server = {
+        port = cfg.ports.lidarr;
+        bindaddress = "127.0.0.1";
+      };
     };
 
     homelab.services.lidarr = {
