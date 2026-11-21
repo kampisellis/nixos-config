@@ -44,24 +44,27 @@ in
       hostId = "8425e349";
       useDHCP = false;
 
-      interfaces.nic0.ipv4.addresses = [
-        {
-          address = cfg.ips.primary;
-          prefixLength = 24;
-        }
-        {
-          address = cfg.ips.dns;
-          prefixLength = 24;
-        }
-        {
-          address = cfg.ips.caddy;
-          prefixLength = 24;
-        }
-        {
-          address = cfg.ips.site;
-          prefixLength = 24;
-        }
-      ];
+      interfaces.nic0 = {
+        wakeOnLan.enable = true;
+        ipv4.addresses = [
+          {
+            address = cfg.ips.primary;
+            prefixLength = 24;
+          }
+          {
+            address = cfg.ips.dns;
+            prefixLength = 24;
+          }
+          {
+            address = cfg.ips.caddy;
+            prefixLength = 24;
+          }
+          {
+            address = cfg.ips.site;
+            prefixLength = 24;
+          }
+        ];
+      };
 
       defaultGateway = cfg.ips.gateway;
       nameservers = [
@@ -200,6 +203,57 @@ in
         icon = "mikrotik.png";
         description = "RouterOS";
         order = 60;
+      };
+
+      switch = {
+        name = "Ubiquiti Switch";
+        subdomain = "switch";
+        group = "Infrastructure";
+        icon = "ubiquiti.png";
+        description = "Core Switch";
+        order = 70;
+        extraCaddyConfig = ''
+          reverse_proxy https://10.10.10.2 {
+            header_down Location ^https?://10\.10\.10\.2(?::443)?(.*)$ https://switch.${cfg.domain}$1
+            transport http {
+              tls_insecure_skip_verify
+            }
+          }
+        '';
+      };
+
+      ap = {
+        name = "ZTE AP";
+        subdomain = "ap";
+        group = "Infrastructure";
+        icon = "mdi-access-point";
+        description = "Wi-Fi Access Point";
+        order = 80;
+        extraCaddyConfig = ''
+          reverse_proxy http://10.10.10.3 {
+            header_up Host 10.10.10.3
+            header_up Origin http://10.10.10.3
+            header_up Referer http://10.10.10.3/
+            header_down Location ^http://10\.10\.10\.3(.*)$ https://ap.${cfg.domain}$1
+          }
+        '';
+      };
+
+      zte5g = {
+        name = "ZTE 5G";
+        subdomain = "5g";
+        group = "Infrastructure";
+        icon = "mdi-signal-5g";
+        description = "5G CPE Modem";
+        order = 90;
+        extraCaddyConfig = ''
+          reverse_proxy http://10.10.20.1 {
+            header_up Host 10.10.20.1
+            header_up Origin http://10.10.20.1
+            header_up Referer http://10.10.20.1/
+            header_down Location ^http://10\.10\.20\.1(.*)$ https://5g.${cfg.domain}$1
+          }
+        '';
       };
     };
   };

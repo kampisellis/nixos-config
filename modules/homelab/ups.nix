@@ -128,6 +128,29 @@ in
       };
     };
 
+    homelab.services.ups = {
+      name = "PowerWalker UPS";
+      subdomain = "ups";
+      path = "/if/login";
+      group = "Infrastructure";
+      icon = "mdi-battery-charging";
+      description = "UPS IoT Portal";
+      order = 100;
+      extraCaddyConfig = ''
+        reverse_proxy https://10.10.10.253 {
+          header_up Host 10.10.10.253
+          header_down Location ^https?://10\.10\.10\.253(.*)$ https://ups.${cfg.domain}$1
+          transport http {
+            tls_insecure_skip_verify
+            versions 1.1
+            keepalive off
+            dial_timeout 15s
+            response_header_timeout 30s
+          }
+        }
+      '';
+    };
+
     systemd.services = {
       upsdrv.onFailure = [ "notify-ntfy@%n.service" ];
       upsd.onFailure = [ "notify-ntfy@%n.service" ];

@@ -28,6 +28,13 @@ in
 
     systemd.settings.Manager.RuntimeWatchdogSec = "30s";
 
+    # Prevent accidental physical bumps or USB keyboard unplug events from powering off the headless server
+    services.logind.settings.Login = {
+      HandlePowerKey = "ignore";
+      HandleSuspendKey = "ignore";
+      HandleHibernateKey = "ignore";
+    };
+
     # Hardware & power optimization (Intel Core i3-12100 + UHD Graphics 730)
     hardware = {
       enableRedistributableFirmware = true;
