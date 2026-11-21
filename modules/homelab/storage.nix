@@ -44,6 +44,7 @@ in
       # forceImportAll has been removed as pools are cleanly owned by this host.
       zfs = {
         forceImportRoot = true;
+        requestEncryptionCredentials = false;
         extraPools = [ "backup" ];
       };
       kernelParams = [ "zfs.zfs_arc_max=12884901888" ];
@@ -89,19 +90,24 @@ in
     ];
 
     # Spin down 1TB SATA backup HDD after 15 minutes of inactivity
-    systemd.services.hdd-spindown = {
-      description = "Set spin-down timeout on backup SATA HDD (ST1000LM035)";
-      wantedBy = [ "multi-user.target" ];
-      onFailure = [ "notify-ntfy@%n.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        ProtectHome = true;
-        ProtectKernelModules = true;
-        ProtectControlGroups = true;
-        ExecStart = "${pkgs.hdparm}/bin/hdparm -B 127 -S 180 /dev/disk/by-id/ata-ST1000LM035-1RK172_WL1LLNEG";
+    systemd.services = {
+      smartd.onFailure = [ "notify-ntfy@%n.service" ];
+      zfs-scrub.onFailure = [ "notify-ntfy@%n.service" ];
+
+      hdd-spindown = {
+        description = "Set spin-down timeout on backup SATA HDD (ST1000LM035)";
+        wantedBy = [ "multi-user.target" ];
+        onFailure = [ "notify-ntfy@%n.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          ExecStart = "${pkgs.hdparm}/bin/hdparm -B 127 -S 180 /dev/disk/by-id/ata-ST1000LM035-1RK172_WL1LLNEG";
+        };
       };
     };
 

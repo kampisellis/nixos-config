@@ -58,8 +58,8 @@ in
       restic.backups.gdrive-system = {
         initialize = true;
         repository = "rclone:gdrive:homelab-backups/system-encrypted";
-        passwordFile = "/var/lib/secrets/restic.pass";
-        rcloneConfigFile = "/var/lib/secrets/rclone-backup.conf";
+        passwordFile = "${cfg.secretsDir}/restic.pass";
+        rcloneConfigFile = "${cfg.secretsDir}/rclone-backup.conf";
         paths = [
           "/var/lib/backup/postgresql"
           "/var/lib/backup/vaultwarden"
@@ -67,7 +67,7 @@ in
           "/var/lib/couchdb"
           "/var/lib/lidarr"
           "/var/lib/private/technitium-dns-server"
-          "/var/lib/secrets"
+          cfg.secretsDir
         ];
         timerConfig = {
           OnCalendar = "*-*-* 03:45:00";
@@ -92,8 +92,8 @@ in
         wants = [ "network-online.target" ];
         onFailure = [ "notify-ntfy@%n.service" ];
         serviceConfig.ExecStartPre = lib.mkBefore [
-          "${pkgs.coreutils}/bin/test -s /var/lib/secrets/restic.pass"
-          "${pkgs.coreutils}/bin/test -s /var/lib/secrets/rclone-backup.conf"
+          "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
+          "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
         ];
       };
 
@@ -158,7 +158,7 @@ in
 
           TODAY="$(date +%Y-%m-%d)"
           RCLONE_FLAGS=(
-            --config=/var/lib/secrets/rclone-backup.conf
+            --config=${cfg.secretsDir}/rclone-backup.conf
             --fast-list
             --transfers=4
             --checkers=8
@@ -186,7 +186,7 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStartPre = lib.mkBefore [
-            "${pkgs.coreutils}/bin/test -s /var/lib/secrets/rclone-backup.conf"
+            "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
           ];
         };
       };

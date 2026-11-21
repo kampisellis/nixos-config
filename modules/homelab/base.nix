@@ -15,6 +15,9 @@ in
       # Prevent Intel OC Watchdog from claiming /dev/watchdog0 over iTCO_wdt
       blacklistedKernelModules = [ "intel_oc_wdt" ];
 
+      # Explicit systemd stage-1 initrd (default in 26.05, required in 26.11)
+      initrd.systemd.enable = true;
+
       loader = {
         systemd-boot = {
           enable = true;

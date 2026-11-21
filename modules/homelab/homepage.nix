@@ -66,6 +66,9 @@ in
       showInHomepage = false;
     };
 
-    systemd.services.homepage-dashboard.onFailure = [ "notify-ntfy@%n.service" ];
+    systemd.services.homepage-dashboard = {
+      environment.HOSTNAME = "127.0.0.1";
+      onFailure = [ "notify-ntfy@%n.service" ];
+    };
   };
 }

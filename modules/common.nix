@@ -27,6 +27,12 @@
   time.timeZone = "Europe/Athens";
   i18n.defaultLocale = "en_US.UTF-8";
 
+  # Bound persistent journald disk usage across both hosts
+  services.journald.extraConfig = ''
+    SystemMaxUse=500M
+    MaxRetentionSec=1month
+  '';
+
   environment.systemPackages = with pkgs; [
     btop
     curl
