@@ -49,7 +49,54 @@
         "dmask=0077"
       ];
     };
+
+    # On-demand SMB3 automounts from homelab (never block boot, suspend, or shutdown away from LAN)
+    "/mnt/roms" = {
+      device = "//10.10.10.5/roms";
+      fsType = "cifs";
+      options = [
+        "x-systemd.automount"
+        "noauto"
+        "x-systemd.idle-timeout=60"
+        "x-systemd.device-timeout=5s"
+        "x-systemd.mount-timeout=5s"
+        "nofail"
+        "_netdev"
+        "ro"
+        "vers=3.0"
+        "credentials=/var/lib/secrets/smb-homelab.cred"
+        "uid=1000"
+        "gid=100"
+        "file_mode=0444"
+        "dir_mode=0555"
+      ];
+    };
+
+    "/mnt/nas-games" = {
+      device = "//10.10.10.5/data/Games";
+      fsType = "cifs";
+      options = [
+        "x-systemd.automount"
+        "noauto"
+        "x-systemd.idle-timeout=60"
+        "x-systemd.device-timeout=5s"
+        "x-systemd.mount-timeout=5s"
+        "nofail"
+        "_netdev"
+        "rw"
+        "vers=3.0"
+        "credentials=/var/lib/secrets/smb-homelab.cred"
+        "uid=1000"
+        "gid=1000"
+        "file_mode=0644"
+        "dir_mode=0755"
+      ];
+    };
   };
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/secrets 0700 root root -"
+  ];
 
   zramSwap = {
     enable = true;
@@ -138,12 +185,14 @@
       cores: with cores; [
         beetle-psx-hw
         bsnes
+        dolphin
         fbneo
         flycast
         genesis-plus-gx
         melonds
         mgba
         mupen64plus
+        ppsspp
         snes9x
       ]
     ))
@@ -172,6 +221,7 @@
 
     amdgpu_top
     android-tools
+    cifs-utils
     kdePackages.gwenview
     kdePackages.kate
     nfs-utils
