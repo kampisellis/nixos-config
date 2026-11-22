@@ -157,8 +157,10 @@ in
             --allow-other \
             --read-only \
             --vfs-cache-mode full \
-            --vfs-cache-max-size 40G \
+            --vfs-cache-max-size 80G \
             --vfs-cache-max-age 336h \
+            --vfs-read-ahead 256M \
+            --buffer-size 64M \
             --cache-dir /var/cache/rclone
         '';
         ExecStop = "/run/wrappers/bin/fusermount3 -u /mnt/roms";
