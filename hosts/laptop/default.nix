@@ -202,6 +202,7 @@
     pcsx2
     thunderbird
     discord
+    viber
     vscode
     (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
     chromium
