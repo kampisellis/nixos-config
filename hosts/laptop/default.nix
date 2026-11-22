@@ -151,6 +151,9 @@
 
     printing.enable = true;
     flatpak.enable = false;
+
+    # Hidraw/uaccess rules for 8BitDo Pro 3 (Bluetooth and USB/2.4GHz dongle) and other gamepads
+    udev.packages = [ pkgs.game-devices-udev-rules ];
   };
 
   security.rtkit.enable = true;
