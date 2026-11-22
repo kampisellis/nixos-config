@@ -199,7 +199,6 @@
     pcsx2
     thunderbird
     discord
-    jetbrains.clion
     vscode
     (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
     chromium
@@ -207,7 +206,6 @@
     firefox
     signal-desktop
     telegram-desktop
-    vesktop
     # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
 
     jdk11
