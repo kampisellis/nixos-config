@@ -7,6 +7,29 @@
 
 let
   cfg = config.homelab;
+
+  notifyNtfyScript = pkgs.writeShellScript "notify-ntfy" ''
+    set -euo pipefail
+    unit="''${1:-unknown}"
+    host="${config.networking.hostName}"
+    ts="$(${pkgs.coreutils}/bin/date -Iseconds)"
+    logs="$(${pkgs.systemd}/bin/journalctl -u "$unit" -n 15 --no-pager --output=short-iso 2>/dev/null || echo '(journal unavailable)')"
+
+    body="$(printf 'Unit: %s\nHost: %s\nTime: %s\n\nLast 15 journal lines:\n%s\n' "$unit" "$host" "$ts" "$logs")"
+
+    ${pkgs.curl}/bin/curl \
+      --silent \
+      --show-error \
+      --fail \
+      --max-time 10 \
+      --retry 3 \
+      --retry-delay 2 \
+      -H "Title: Homelab Service Failed: $unit" \
+      -H "Priority: high" \
+      -H "Tags: warning" \
+      --data-binary "$body" \
+      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts"
+  '';
 in
 {
   config = lib.mkIf cfg.enable {
@@ -124,6 +147,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         DynamicUser = true;
+        SupplementaryGroups = [ "systemd-journal" ];
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
@@ -136,22 +160,27 @@ in
         RestrictAddressFamilies = [
           "AF_INET"
           "AF_INET6"
+          "AF_UNIX"
         ];
-        ExecStart = ''
-          ${pkgs.curl}/bin/curl \
-            --silent \
-            --show-error \
-            --fail \
-            --max-time 10 \
-            --retry 3 \
-            --retry-delay 2 \
-            -H "Title: Homelab Service Failed" \
-            -H "Priority: high" \
-            -H "Tags: warning" \
-            -d "Service %i failed on ${config.networking.hostName}" \
-            http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts
-        '';
+        ExecStart = "${notifyNtfyScript} %i";
       };
+    };
+
+    # Global systemd OnFailure drop-in so every failing service/backup/timer alerts ntfy-sh;
+    # per-unit drop-ins clear OnFailure on notify-ntfy@ and ntfy-sh to prevent recursion loops.
+    systemd.units = lib.mkIf cfg.ntfy.enable {
+      "service.d/10-onfailure.conf".text = ''
+        [Unit]
+        OnFailure=notify-ntfy@%n.service
+      '';
+      "notify-ntfy@.service.d/99-no-onfailure.conf".text = ''
+        [Unit]
+        OnFailure=
+      '';
+      "ntfy-sh.service.d/99-no-onfailure.conf".text = ''
+        [Unit]
+        OnFailure=
+      '';
     };
 
     environment.systemPackages = with pkgs; [

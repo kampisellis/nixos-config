@@ -84,6 +84,25 @@ in
           "--keep-monthly 6"
         ];
       };
+
+      restic.backups.gdrive-other-backups = {
+        initialize = true;
+        repository = "rclone:gdrive:homelab-backups/other-backups-encrypted";
+        passwordFile = "${cfg.secretsDir}/restic.pass";
+        rcloneConfigFile = "${cfg.secretsDir}/rclone-backup.conf";
+        paths = [
+          "/mnt/nas-data/Giannis/Library/Backups"
+        ];
+        timerConfig = {
+          OnCalendar = "*-*-* 03:50:00";
+          Persistent = true;
+        };
+        pruneOpts = [
+          "--keep-daily 7"
+          "--keep-weekly 4"
+          "--keep-monthly 6"
+        ];
+      };
     };
 
     # Catch up on missed nightly jobs at the next boot (e.g. after a UPS shutdown)
@@ -113,6 +132,20 @@ in
           "backup-vaultwarden.service"
         ];
         wants = [ "network-online.target" ];
+        onFailure = [ "notify-ntfy@%n.service" ];
+        serviceConfig.ExecStartPre = lib.mkBefore [
+          "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
+          "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
+        ];
+      };
+
+      restic-backups-gdrive-other-backups = {
+        after = [
+          "network-online.target"
+          "restic-backups-gdrive-system.service"
+        ];
+        wants = [ "network-online.target" ];
+        unitConfig.RequiresMountsFor = "/mnt/nas-data";
         onFailure = [ "notify-ntfy@%n.service" ];
         serviceConfig.ExecStartPre = lib.mkBefore [
           "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
@@ -169,6 +202,7 @@ in
         after = [
           "network-online.target"
           "restic-backups-gdrive-system.service"
+          "restic-backups-gdrive-other-backups.service"
         ];
         wants = [ "network-online.target" ];
         onFailure = [ "notify-ntfy@%n.service" ];
