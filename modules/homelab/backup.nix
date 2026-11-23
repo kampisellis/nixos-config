@@ -114,6 +114,7 @@ in
           "syncoid-data-backup"
           "backup-snapshot-prune"
           "rclone-gdrive-backup"
+          "restic-check-gdrive"
         ]
         (_: {
           timerConfig.Persistent = true;
@@ -258,6 +259,32 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStartPre = lib.mkBefore [
+            "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
+          ];
+        };
+      };
+
+      # Weekly Restic repository integrity check (5% data read-back) on Google Drive
+      restic-check-gdrive = {
+        description = "Weekly Restic integrity check for Google Drive backups";
+        startAt = "Sun *-*-* 04:30:00";
+        after = [
+          "network-online.target"
+          "restic-backups-gdrive-system.service"
+          "restic-backups-gdrive-other-backups.service"
+          "rclone-gdrive-backup.service"
+        ];
+        wants = [ "network-online.target" ];
+        unitConfig.RequiresMountsFor = "/var/lib/secrets";
+        script = ''
+          set -euo pipefail
+          /run/current-system/sw/bin/restic-gdrive-system check --read-data-subset=5%
+          /run/current-system/sw/bin/restic-gdrive-other-backups check --read-data-subset=5%
+        '';
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStartPre = lib.mkBefore [
+            "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
             "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
           ];
         };

@@ -76,7 +76,7 @@ in
       ];
 
       # Explicit firewall: no blanket trustedInterfaces on wt0.
-      # DNS (53 TCP/UDP) is open explicitly (Technitium UI is Caddy-only); NetBird opens 51820 (UDP); Samba opens 445/139 (TCP).
+      # DNS (53 TCP/UDP) is open explicitly (Technitium UI is Caddy-only); NetBird opens 51820 (UDP); Samba SMB3 uses TCP 445 only (no NetBIOS 137/138/139).
       firewall = {
         enable = true;
         allowedTCPPorts = [
@@ -84,6 +84,7 @@ in
           53
           80
           443
+          445
         ];
         allowedUDPPorts = [
           53

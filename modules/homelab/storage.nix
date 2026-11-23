@@ -35,6 +35,42 @@ let
       --data-binary "$message" \
       "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
   '';
+
+  diskCapacityAlertScript = pkgs.writeShellScript "disk-capacity-alert" ''
+    set -euo pipefail
+    threshold=80
+    alerts=""
+
+    for mount in / /boot; do
+      pct="$(${pkgs.coreutils}/bin/df --output=pcent "$mount" | ${pkgs.coreutils}/bin/tail -n 1 | ${pkgs.coreutils}/bin/tr -dc '0-9')"
+      if [ -n "$pct" ] && [ "$pct" -ge "$threshold" ]; then
+        alerts="$(printf '%s- Filesystem %s: %s%% used (threshold %s%%)\n' "$alerts" "$mount" "$pct" "$threshold")"
+      fi
+    done
+
+    for pool in tank backup; do
+      pct="$(${pkgs.zfs}/bin/zpool list -H -o capacity "$pool" | ${pkgs.coreutils}/bin/tr -dc '0-9')"
+      if [ -n "$pct" ] && [ "$pct" -ge "$threshold" ]; then
+        alerts="$(printf '%s- ZFS pool %s: %s%% used (threshold %s%%)\n' "$alerts" "$pool" "$pct" "$threshold")"
+      fi
+    done
+
+    if [ -n "$alerts" ]; then
+      body="$(printf 'Storage capacity threshold (>=%s%%) exceeded on ${config.networking.hostName}:\n%s' "$threshold" "$alerts")"
+      ${pkgs.curl}/bin/curl \
+        --silent \
+        --show-error \
+        --fail \
+        --max-time 10 \
+        --retry 3 \
+        --retry-delay 2 \
+        -H "Title: Disk Capacity Alert on ${config.networking.hostName}" \
+        -H "Priority: high" \
+        -H "Tags: floppy_disk,warning" \
+        --data-binary "$body" \
+        "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts"
+    fi
+  '';
 in
 {
   config = lib.mkIf cfg.enable {
@@ -109,7 +145,23 @@ in
           ExecStart = "${pkgs.hdparm}/bin/hdparm -B 127 -S 180 /dev/disk/by-id/ata-ST1000LM035-1RK172_WL1LLNEG";
         };
       };
+
+      disk-capacity-alert = {
+        description = "Check filesystem and ZFS pool capacity and alert ntfy if >= 80%";
+        startAt = "*-*-* 08:00:00";
+        serviceConfig = {
+          Type = "oneshot";
+          NoNewPrivileges = true;
+          PrivateTmp = true;
+          ProtectHome = true;
+          ProtectKernelModules = true;
+          ProtectControlGroups = true;
+          ExecStart = "${diskCapacityAlertScript}";
+        };
+      };
     };
+
+    systemd.timers.disk-capacity-alert.timerConfig.Persistent = true;
 
     # Filesystems (labels and ZFS dataset mountpoints preserved unchanged)
     fileSystems."/" = {

@@ -7,7 +7,9 @@ in
   config = lib.mkIf cfg.enable {
     services.samba = {
       enable = true;
-      openFirewall = true;
+      # Keep false so NixOS does not open legacy NetBIOS ports (TCP 139, UDP 137/138);
+      # SMB3 TCP 445 is opened explicitly in networking.nix.
+      openFirewall = false;
       # SMB3-only: NetBIOS name service (nmbd, UDP 137/138) and TCP 139 are unnecessary
       nmbd.enable = false;
       settings = {
