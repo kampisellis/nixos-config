@@ -31,6 +31,9 @@
       systemd.enable = true;
       kernelModules = [ "amdgpu" ];
     };
+
+    # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend
+    kernelParams = [ "amdgpu.sg_display=0" ];
   };
 
   # Placeholder label-based mounts using mkDefault so `nixos-generate-config` UUID entries
