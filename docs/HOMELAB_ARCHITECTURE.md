@@ -190,6 +190,7 @@
 
 - **ZFS ARC Cap:** `zfs.zfs_arc_max=12884901888` (**12.00 GiB**, ~38% της RAM) — αφήνει άφθονη μνήμη για Immich ML, PostgreSQL, CouchDB και rclone.
 - **Pool Tuning & Health:** Και τα δύο pools είναι `ONLINE` με `0` read/write/cksum errors (`tank` `26%` / `11%` frag, `backup` `26%` / `3%` frag). `forceImportRoot = true` (προσωρινά μέχρι φυσική επαλήθευση hostid reboot) και `extraPools = [ "backup" ]`.
+- **Προειδοποίηση Ιστορικού Υγείας Δίσκου `/dev/sda` (`backup` pool):** Παρότι το `backup` pool αναφέρει αυτή τη στιγμή `ONLINE` με `0` νέα ZFS errors και το SMART self-assessment περνά (`PASSED`, `Reallocated_Sector_Ct=0`, `Current_Pending_Sector=0`, `Offline_Uncorrectable=0`), ο Seagate `ST1000LM035-1RK172` (`WL1LLNEG`) φέρει ιστορικούς δείκτες σφαλμάτων από την προηγούμενη χρήση του στο Proxmox (**`Reported_Uncorrect = 93`**, **`ATA Error Count = 65`**, καθώς και ιστορικό ZFS permanent errors). Πρέπει να αντιμετωπίζεται ως **προσωρινό μέσο τοπικού backup** και να είναι ο **πρώτος δίσκος προς αντικατάσταση** όταν είναι εφικτό.
 
 | ZFS Dataset | Used | Refer | Avail | Mountpoint | Compression | `atime` | Recordsize | Ρόλος |
 | :--- | ---: | ---: | ---: | :--- | :---: | :---: | :---: | :--- |
@@ -204,24 +205,23 @@
 
 ```text
 /mnt/nas-data/                             (gkampisellis:users, 0777)
-├── Games/                                 (gkampisellis:users, 0755)  ~2.7G bios, 20M saves, 25K states
+├── Games/                                 (gkampisellis:users, 0755)  ~2.7 GiB on-disk ZFS (~4.1 GiB logical)
 │   ├── bios/                              # Shared emulator BIOSes (RetroArch & PCSX2)
 │   ├── saves/                             # Shared emulator savefiles / PS2 MemoryCards
 │   └── states/                            # Shared emulator savestates
-├── Giannis/                               (gkampisellis:users, 0777)
-│   ├── Apps/                              (gkampisellis:users, 0777)
-│   │   ├── Immich/                        (immich:immich 999:999, 0777)  ~122 GiB — ΜΗΝ κάνεις chown!
-│   │   │   ├── library/admin/             # Πρωτότυπες φωτό/βίντεο (~115 GiB, sync σε Google Drive)
-│   │   │   ├── thumbs/, encoded-video/    # Παράγωγα Immich (αναδημιουργούνται)
-│   │   │   ├── backups/                   # Εσωτερικά Immich DB dumps (0600 immich:immich)
-│   │   │   └── upload/, profile/          # Uploads / avatars
-│   │   └── Site/                          (gkampisellis:users, 0755)  ~6.2M — Hugo source για kampisellis.com
-│   └── Library/                           (gkampisellis:users, 0777)
-│       ├── Documents/                     (gkampisellis:users, 0775)  ~7.2G — Προσωπικά έγγραφα (sync σε Drive)
-│       ├── Backups/                       (gkampisellis:users, 0775)  ~112M — Προσωπικά recovery archives (Restic)
-│       ├── Audio/                         (gkampisellis:users, 0755)  ~63M  — Ηχητικά αρχεία
-│       └── Notes/                         (gkampisellis:users, 0755)  ~7.1M — Vault σημειώσεων (sync μέσω CouchDB)
-└── migration/                             (root:root, 0755)           ~232M — Παλαιά αρχεία μετανάστευσης από Proxmox/TrueNAS
+└── Giannis/                               (gkampisellis:users, 0777)
+    ├── Apps/                              (gkampisellis:users, 0777)
+    │   ├── Immich/                        (immich:immich 999:999, 0777)  ~122 GiB — ΜΗΝ κάνεις chown!
+    │   │   ├── library/admin/             # Πρωτότυπες φωτό/βίντεο (~115 GiB, sync σε Google Drive)
+    │   │   ├── thumbs/, encoded-video/    # Παράγωγα Immich (αναδημιουργούνται)
+    │   │   ├── backups/                   # Εσωτερικά Immich DB dumps (0600 immich:immich)
+    │   │   └── upload/, profile/          # Uploads / avatars
+    │   └── Site/                          (gkampisellis:users, 0755)  ~6.2M — Hugo source για kampisellis.com
+    └── Library/                           (gkampisellis:users, 0777)
+        ├── Documents/                     (gkampisellis:users, 0775)  ~7.2G — Προσωπικά έγγραφα (sync σε Drive)
+        ├── Backups/                       (gkampisellis:users, 0775)  ~345 MiB on-disk ZFS (~483 MiB logical, περιλαμβάνει `migration/`)
+        ├── Audio/                         (gkampisellis:users, 0755)  ~63M  — Ηχητικά αρχεία
+        └── Notes/                         (gkampisellis:users, 0755)  ~7.1M — Vault σημειώσεων (sync μέσω CouchDB)
 ```
 
 **Γιατί χωρίζονται οι ιδιοκτησίες:** Όλοι οι προσωπικοί φάκελοι και το `Games/` ανήκουν στον `gkampisellis:users` (`1000:100`) ώστε η Samba (`force user = gkampisellis`) να διαβάζει και να γράφει απρόσκοπτα από Linux & Android. Αντίθετα, το `Apps/Immich/` ανήκει στον system user `immich:immich` (`999:999`) που τρέχει το `immich-server.service` — ένα τυφλό `chown -R` σε όλο το `/mnt/nas-data` θα έσπαγε το Immich.
@@ -423,12 +423,11 @@ tank/data     ──(hourly sanoid)──► snapshots ──(03:05 syncoid)─�
 | `/mnt/nas-data/Giannis/Apps/Immich/library/admin` | ✅ | ✅ | ✅ rclone `homelab-backups/media` | Πρωτότυπες φωτό/βίντεο (~115 GiB) |
 | `/mnt/nas-data/Giannis/Library/Documents` | ✅ | ✅ | ✅ rclone `homelab-backups/documents` | Προσωπικά έγγραφα (~7.2 GiB) |
 | `/mnt/nas-data/Giannis/Apps/Site` | ✅ | ✅ | ✅ rclone `homelab-backups/site` | Hugo πηγαίος κώδικας `kampisellis.com` |
-| `/mnt/nas-data/Giannis/Library/Backups` | ✅ | ✅ | ✅ Restic `other-backups-encrypted` | Προσωπικά recovery archives |
+| `/mnt/nas-data/Giannis/Library/Backups` | ✅ | ✅ | ✅ Restic `other-backups-encrypted` | Προσωπικά recovery archives & αρχειοθετημένο `migration/` (~345 MiB ZFS / ~483 MiB logical) |
 | `/mnt/nas-data/Giannis/Apps/Immich/{thumbs,encoded-video,backups}` | ✅ | ✅ | ❌ Εκτός (σκόπιμα) | Αναδημιουργούνται από Immich (DB backup ήδη στο Restic) |
 | `/mnt/nas-data/Giannis/Library/Notes` | ✅ | ✅ | ⚠️ Μέσω CouchDB στο Restic | Το ενεργό vault συγχρονίζεται μέσω CouchDB (`system-encrypted`) |
 | `/mnt/nas-data/Giannis/Library/Audio` | ✅ | ✅ | ❌ Εκτός cloud | Μόνο τοπική ZFS προστασία (63 MiB) |
-| `/mnt/nas-data/Games` (`bios`, `saves`, `states`) | ✅ | ✅ | ❌ Εκτός cloud | Μόνο τοπική ZFS προστασία (~4.1 GiB) |
-| `/mnt/nas-data/migration` | ✅ | ✅ | ❌ Εκτός cloud | Παλαιά αρχεία μετανάστευσης (~232 MiB) |
+| `/mnt/nas-data/Games` (`bios`, `saves`, `states`) | ✅ | ✅ | ❌ Εκτός cloud | Μόνο τοπική ZFS προστασία (~2.7 GiB ZFS / ~4.1 GiB logical) |
 | `/var/lib/{caddy,ntfy-sh,samba,netbird-wt0,kampisellis-site}` | ✅ | ✅ | ❌ Εκτός cloud | Αναγεννώνται ή επαναρρυθμίζονται εύκολα |
 | `/mnt/roms` | N/A | N/A | ✅ Πηγή είναι το `gdrive:roms-encrypted` | Κρυπτογραφημένο cloud-native mount |
 
@@ -669,19 +668,31 @@ sudo rm -rf /tmp/restore
    sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab --no-root-passwd
    # Reboot (μετά το boot όρισε passwd & smbpasswd για gkampisellis)
    ```
-8. **Επαναφορά NAS Δεδομένων από Google Drive** (μετά το boot, με σταματημένο το `immich-server` κατά την επαναφορά της DB & media):
+8. **Επαναφορά NAS Δεδομένων, Vaultwarden & Immich DB από Google Drive** (μετά το boot, με σταματημένες τις υπηρεσίες κατά την επαναφορά των βάσεων):
    ```bash
-   sudo systemctl stop immich-server.service immich-machine-learning.service
-   # 1. Restore Immich media, Documents & Site
+   sudo systemctl stop immich-server.service immich-machine-learning.service vaultwarden.service
+
+   # 1. Restore Vaultwarden από /var/lib/backup/vaultwarden (το Restic κρατά το online SQLite dump + RSA key, όχι το live /var/lib/vaultwarden)
+   sudo rm -f /var/lib/vaultwarden/db.sqlite3-wal /var/lib/vaultwarden/db.sqlite3-shm
+   sudo cp -a /var/lib/backup/vaultwarden/db.sqlite3 /var/lib/backup/vaultwarden/rsa_key.pem /var/lib/vaultwarden/
+   sudo cp -a /var/lib/backup/vaultwarden/icon_cache /var/lib/vaultwarden/ 2>/dev/null || true
+   sudo chown -R vaultwarden:vaultwarden /var/lib/vaultwarden
+   sudo chmod 600 /var/lib/vaultwarden/rsa_key.pem
+   sudo systemctl start vaultwarden.service
+
+   # 2. Restore Immich media, Documents & Site
    sudo rclone --config=/var/lib/secrets/rclone-backup.conf copy gdrive:homelab-backups/media /mnt/nas-data/Giannis/Apps/Immich/library/admin
    sudo rclone --config=/var/lib/secrets/rclone-backup.conf copy gdrive:homelab-backups/documents /mnt/nas-data/Giannis/Library/Documents
    sudo rclone --config=/var/lib/secrets/rclone-backup.conf copy gdrive:homelab-backups/site /mnt/nas-data/Giannis/Apps/Site
-   # 2. Restore Library/Backups από Restic
+
+   # 3. Restore Library/Backups από Restic
    sudo restic-gdrive-other-backups restore latest --target /
-   # 3. Διόρθωση ιδιοκτησιών (Immich = immich:immich, υπόλοιπα = gkampisellis:users)
+
+   # 4. Διόρθωση ιδιοκτησιών (Immich = immich:immich, υπόλοιπα = gkampisellis:users)
    sudo chown -R immich:immich /mnt/nas-data/Giannis/Apps/Immich
    sudo chown -R gkampisellis:users /mnt/nas-data/Giannis/Library /mnt/nas-data/Giannis/Apps/Site
-   # 4. Import Immich PostgreSQL dump από /var/lib/backup/postgresql/immich.sql.gz & εκκίνηση Immich
+
+   # 5. Import Immich PostgreSQL dump από /var/lib/backup/postgresql/immich.sql.gz & εκκίνηση Immich
    sudo systemctl start immich-server.service immich-machine-learning.service
    ```
 
@@ -697,6 +708,7 @@ sudo rm -rf /tmp/restore
 6. **Προσοχή στο `nixpkgs-unstable`:** Μην τρέχεις τυφλά `just update-unstable` χωρίς `just diff homelab` και φρέσκο ZFS snapshot (`sudo zfs snapshot -r tank@pre-unstable`) — επηρεάζει Immich (PostgreSQL migrations) και NetBird.
 7. **Snapshots ≠ Backups:** Κάνε τουλάχιστον ένα ετήσιο restore drill (PostgreSQL Immich, Vaultwarden SQLite, Restic restore) για επιβεβαίωση ότι τα backups ανακτώνται πραγματικά.
 8. **Μη δημιουργείς χειροκίνητα snapshots με ίδιο όνομα στο `backup`:** Τα χειροκίνητα snapshots γίνονται μόνο στο `tank` ώστε να μην συγκρούονται με το `syncoid`.
+9. **Αντιμετώπισε τον δίσκο `backup` (`/dev/sda`, `ST1000LM035-1RK172`) ως προσωρινό & προτεραιότητα αντικατάστασης:** Παρότι είναι `ONLINE` με `0` νέα ZFS errors, έχει ιστορικό `Reported_Uncorrect = 93`, `ATA Error Count = 65` και παλαιά ZFS permanent errors από το Proxmox — αντικατέστησέ τον πρώτον μόλις είναι πρακτικό (Playbook 4, Περίπτωση Β).
 
 ---
 
