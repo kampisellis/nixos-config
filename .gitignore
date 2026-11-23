@@ -23,3 +23,7 @@ Thumbs.db
 rclone.conf
 secrets/*.plain
 *.age.dec
+
+# Private local homelab docs & break-glass recovery sheets
+docs/HOMELAB_ARCHITECTURE.md
+*Break-Glass*.pdf
