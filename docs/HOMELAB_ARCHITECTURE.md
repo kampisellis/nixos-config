@@ -189,7 +189,7 @@
 ### ZFS Pools, Tuning & Datasets
 
 - **ZFS ARC Cap:** `zfs.zfs_arc_max=12884901888` (**12.00 GiB**, ~38% της RAM) — αφήνει άφθονη μνήμη για Immich ML, PostgreSQL, CouchDB και rclone.
-- **Pool Tuning & Health:** Και τα δύο pools είναι `ONLINE` με `0` read/write/cksum errors (`tank` `26%` / `11%` frag, `backup` `26%` / `3%` frag). `forceImportRoot = true` (προσωρινά μέχρι φυσική επαλήθευση hostid reboot) και `extraPools = [ "backup" ]`.
+- **Pool Tuning & Health:** Και τα δύο pools είναι `ONLINE` με `0` read/write/cksum errors (`tank` `26%` / `11%` frag, `backup` `26%` / `3%` frag). Το `boot.zfs.forceImportRoot = false` είναι καθαρά απενεργοποιημένο, καθώς επαληθεύτηκε 100% ταύτιση `hostId` (`0x8425e349` / `2217075529`) μεταξύ OS, `tank` και `backup` (`extraPools = [ "backup" ]`).
 - **Προειδοποίηση Ιστορικού Υγείας Δίσκου `/dev/sda` (`backup` pool):** Παρότι το `backup` pool αναφέρει αυτή τη στιγμή `ONLINE` με `0` νέα ZFS errors και το SMART self-assessment περνά (`PASSED`, `Reallocated_Sector_Ct=0`, `Current_Pending_Sector=0`, `Offline_Uncorrectable=0`), ο Seagate `ST1000LM035-1RK172` (`WL1LLNEG`) φέρει ιστορικούς δείκτες σφαλμάτων από την προηγούμενη χρήση του στο Proxmox (**`Reported_Uncorrect = 93`**, **`ATA Error Count = 65`**, καθώς και ιστορικό ZFS permanent errors). Πρέπει να αντιμετωπίζεται ως **προσωρινό μέσο τοπικού backup** και να είναι ο **πρώτος δίσκος προς αντικατάσταση** όταν είναι εφικτό.
 
 | ZFS Dataset | Used | Refer | Avail | Mountpoint | Compression | `atime` | Recordsize | Ρόλος |
@@ -344,8 +344,8 @@
 - **Γιατί αυτές οι ρυθμίσεις:** Το `--vfs-cache-mode full` με όριο `80G` στον OS SSD (`/dev/sdb2`, 161G ελεύθερα) κρατά τοπικά τα ενεργά PS2/Dreamcast `.chd` chunks, ενώ τα `--vfs-read-ahead 256M` και `--buffer-size 64M` εξαλείφουν τα κολλήματα 1–2 δευτερολέπτων σε open-world streaming παιχνίδια. Με `ConditionFileNotEmpty = "/var/lib/secrets/rclone.conf"` η υπηρεσία παραλείπεται καθαρά αν δεν έχει ρυθμιστεί το `rclone.conf`.
 
 ### Αρχιτεκτονική `laptop` (`hosts/laptop/default.nix`)
-- **Υλικό:** ASUS TUF FX505DY — AMD Ryzen 5 3550H (Vega 8 iGPU) + διακριτή AMD Radeon RX 560X (`DRI_PRIME=1`, Vulkan RADV Polaris 11), `zramSwap` 50%, `power-profiles-daemon`, `switcherooControl`, `amdgpu` initrd module, `bluetooth.powerOnBoot = true`.
-- **Desktop & Περιβάλλον:** KDE Plasma 6 + SDDM (Wayland), PipeWire (ALSA 32-bit + Pulse + JACK), US/GR keyboard (`Alt+Shift`), `allowUnfree = true`, AppImage `binfmt`, `pkgs.game-devices-udev-rules` (υποστήριξη hidraw/uaccess για διπλά 8BitDo Pro 3 Bluetooth/USB), `system.autoUpgrade` (Τρίτη `12:00` `operation = "boot"`, `allowReboot = false`, `ConditionACPower = true`).
+- **Υλικό:** ASUS TUF FX505DY — AMD Ryzen 5 3550H (Vega 8 iGPU) + διακριτή AMD Radeon RX 560X (`DRI_PRIME=1`, Vulkan RADV Polaris 11 & Mesa VA-API `radeonsi_drv_video.so` 64/32-bit, `libva-utils`), `zramSwap` 50%, `systemd-oomd`, `services.fstrim`, `services.fwupd`, `power-profiles-daemon`, `switcherooControl`, `amdgpu` initrd module, `bluetooth.powerOnBoot = true`.
+- **Desktop & Περιβάλλον:** KDE Plasma 6 + SDDM (Wayland), PipeWire (ALSA 32-bit + Pulse + JACK), US/GR keyboard (`Alt+Shift`), `allowUnfree = true`, AppImage `binfmt`, Feral GameMode (`programs.gamemode = { enable = true; enableRenice = true; }`, `giannis` στο group `gamemode`), `pkgs.game-devices-udev-rules` (υποστήριξη hidraw/uaccess για διπλά 8BitDo Pro 3 Bluetooth/USB), `system.autoUpgrade` (Τρίτη `12:00` `operation = "boot"`, `allowReboot = false`, `ConditionACPower = true`).
 - **Μόνιμα SMB 3.1.1 Automounts (`hosts/laptop/default.nix`):**
 
 | Mountpoint (`laptop`) | SMB Device | Mode | Ownership (`laptop`) | Κοινές επιλογές |

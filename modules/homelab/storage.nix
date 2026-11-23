@@ -76,10 +76,10 @@ in
   config = lib.mkIf cfg.enable {
     boot = {
       supportedFilesystems = [ "zfs" ];
-      # Kept explicitly true until a clean physical-access reboot verifies hostid import;
-      # forceImportAll has been removed as pools are cleanly owned by this host.
+      # Both tank and backup pools are verified owned by hostId 8425e349 (2217075529);
+      # forceImportRoot is cleanly disabled so ZFS protects against accidental foreign imports.
       zfs = {
-        forceImportRoot = true;
+        forceImportRoot = false;
         requestEncryptionCredentials = false;
         extraPools = [ "backup" ];
       };

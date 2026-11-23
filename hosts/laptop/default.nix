@@ -179,10 +179,17 @@
 
   security.rtkit.enable = true;
 
-  # Native AppImage execution (for ES-DE Frontend)
-  programs.appimage = {
-    enable = true;
-    binfmt = true;
+  # Native AppImage execution (for ES-DE Frontend) & Feral GameMode for gaming/emulation
+  programs = {
+    appimage = {
+      enable = true;
+      binfmt = true;
+    };
+
+    gamemode = {
+      enable = true;
+      enableRenice = true;
+    };
   };
 
   # systemd uaccess rules handle Android ADB devices without requiring a legacy adbusers group.
@@ -195,6 +202,7 @@
       group = "giannis";
       extraGroups = [
         "audio"
+        "gamemode"
         "lp"
         "networkmanager"
         "render"
@@ -247,6 +255,7 @@
     cifs-utils
     kdePackages.gwenview
     kdePackages.kate
+    libva-utils
     nfs-utils
     ntfs3g
     nvtopPackages.amd
