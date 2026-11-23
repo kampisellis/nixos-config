@@ -32,7 +32,5 @@ in
       description = "CalDAV & CardDAV";
       order = 40;
     };
-
-    systemd.services.radicale.onFailure = [ "notify-ntfy@%n.service" ];
   };
 }

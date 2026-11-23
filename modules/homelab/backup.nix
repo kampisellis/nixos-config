@@ -121,11 +121,6 @@ in
         });
 
     systemd.services = {
-      sanoid.onFailure = [ "notify-ntfy@%n.service" ];
-      syncoid-state-backup.onFailure = [ "notify-ntfy@%n.service" ];
-      syncoid-data-backup.onFailure = [ "notify-ntfy@%n.service" ];
-      postgresqlBackup-immich.onFailure = [ "notify-ntfy@%n.service" ];
-
       restic-backups-gdrive-system = {
         after = [
           "network-online.target"
@@ -133,7 +128,6 @@ in
           "backup-vaultwarden.service"
         ];
         wants = [ "network-online.target" ];
-        onFailure = [ "notify-ntfy@%n.service" ];
         serviceConfig.ExecStartPre = lib.mkBefore [
           "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
           "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
@@ -147,7 +141,6 @@ in
         ];
         wants = [ "network-online.target" ];
         unitConfig.RequiresMountsFor = "/mnt/nas-data";
-        onFailure = [ "notify-ntfy@%n.service" ];
         serviceConfig.ExecStartPre = lib.mkBefore [
           "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/restic.pass"
           "${pkgs.coreutils}/bin/test -s ${cfg.secretsDir}/rclone-backup.conf"
@@ -162,7 +155,6 @@ in
           "syncoid-state-backup.service"
           "syncoid-data-backup.service"
         ];
-        onFailure = [ "notify-ntfy@%n.service" ];
         path = [
           pkgs.coreutils
           pkgs.findutils
@@ -206,7 +198,6 @@ in
           "restic-backups-gdrive-other-backups.service"
         ];
         wants = [ "network-online.target" ];
-        onFailure = [ "notify-ntfy@%n.service" ];
         unitConfig.RequiresMountsFor = "/mnt/nas-data";
         path = [
           pkgs.coreutils
@@ -275,7 +266,7 @@ in
           "rclone-gdrive-backup.service"
         ];
         wants = [ "network-online.target" ];
-        unitConfig.RequiresMountsFor = "/var/lib/secrets";
+        unitConfig.RequiresMountsFor = cfg.secretsDir;
         script = ''
           set -euo pipefail
           /run/current-system/sw/bin/restic-gdrive-system check --read-data-subset=5%

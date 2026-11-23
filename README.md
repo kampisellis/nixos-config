@@ -19,7 +19,6 @@ Declarative NixOS flake managing my home server (`homelab`) and daily workstatio
 ├── bin/
 │   └── generate-services-table.nix
 ├── docs/
-│   ├── HOMELAB_ARCHITECTURE.md  # Full technical architecture, day-2 operations & DR handbook
 │   └── RUNBOOK.md               # Quick-reference recovery, ZFS maintenance, and restore procedures
 ├── hosts/
 │   ├── homelab/                 # Server entry point and hardware config
@@ -55,7 +54,7 @@ Adding a new service means adding a module under `modules/homelab/services/`, re
 
 ### Pinning & Updates
 
-Both hosts track `nixos-26.05`. `nixpkgs-unstable` is exposed separately as `pkgs-unstable` and used only for packages that need newer releases (currently Immich, NetBird, and SearXNG). A weekly GitHub Actions workflow (`update-flake-lock.yml`) opens a validated PR for stable `nixpkgs` updates; both hosts also run `system.autoUpgrade` weekly (`homelab` Tuesdays `05:30` `switch`, `laptop` Tuesdays `12:00` `boot` on AC power, with `allowReboot = false`). `just update` bumps only the stable `nixpkgs` input and prints a package diff via `nvd` without switching; `just update-unstable` is run manually when inspecting database-backed services.
+Both hosts track `nixos-26.05`. `nixpkgs-unstable` is exposed separately as `pkgs-unstable` and used only for packages that need newer releases (currently Immich, NetBird, and SearXNG). A weekly GitHub Actions workflow (`update-flake-lock.yml`) opens a validated PR for stable `nixpkgs` updates; `homelab` disables `system.autoUpgrade` so changes are always deployed intentionally via `just diff`/`just test`/`just switch`, while `laptop` stages updates weekly via `system.autoUpgrade` (Tuesdays `12:00`, `operation = "boot"` on AC power, `allowReboot = false`). `just update` bumps only the stable `nixpkgs` input and prints a package diff via `nvd` without switching; `just update-unstable` is run manually when inspecting database-backed services.
 
 ### Networking & Access Control
 
@@ -73,15 +72,18 @@ The server runs on a single 2.5GbE interface (`nic0`, Wake-on-LAN enabled) with 
 - **Local backup pool (`backup`):** Single SATA HDD configured to spin down when idle. All local replication and snapshot pruning runs in a single nightly window so the drive wakes up once per day.
 - **Offsite backups:** Critical application state, databases, NixOS uid/gid maps, and runtime secrets are backed up daily with Restic (encrypted). Media, documents, and site source are synced separately to cloud storage with a delete-limit safeguard and a dated `--backup-dir` trash that expires after 30 days.
 
-Nightly backup sequence (all timers are persistent, so jobs missed while the server was off run at the next boot):
+Nightly & weekly backup/monitoring sequence (all timers are persistent, so jobs missed while the server was off run at the next boot):
 
 1. `23:00` — Consistent Vaultwarden SQLite backup to `/var/lib/backup/vaultwarden`.
 2. `02:15` — PostgreSQL dump of the Immich database.
 3. `03:00` — Scheduled `sanoid` snapshots on `tank`.
 4. `03:05` — `syncoid` replication from `tank` to `backup`.
 5. `03:20` — Per-class pruning of older replicated snapshots on `backup`.
-6. `03:45` — Encrypted offsite Restic backup of databases, app state, and secrets.
-7. `04:00` — Offsite `rclone` sync of Immich media, documents, and Hugo site source.
+6. `03:45` — Encrypted offsite Restic backup (`system-encrypted`: databases, app state, `/var/lib/nixos`, and secrets).
+7. `03:50` — Encrypted offsite Restic backup (`other-backups-encrypted`: `/mnt/nas-data/Giannis/Library/Backups`).
+8. `04:00` — Offsite `rclone` sync of Immich media, documents, and Hugo site source (with 30-day `_deleted/` trash).
+9. `08:00` — Daily storage capacity check (`disk-capacity-alert`, alerts `ntfy` if `/`, `/boot`, `tank`, or `backup` ≥ 80%).
+10. `Sun 04:30` — Weekly Restic integrity check (`restic-check-gdrive`, `--read-data-subset=5%` on both repositories).
 
 ### Monitoring, Power & Secrets
 
@@ -117,4 +119,4 @@ just update homelab
 just services-table
 ```
 
-For the full canonical architecture, day-2 operations, and disaster recovery handbook, see [docs/HOMELAB_ARCHITECTURE.md](docs/HOMELAB_ARCHITECTURE.md). Quick-reference recovery and drill procedures are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+For quick-reference recovery, ZFS maintenance, and backup restore drill procedures, see [docs/RUNBOOK.md](docs/RUNBOOK.md).

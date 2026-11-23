@@ -48,7 +48,6 @@ in
       useDHCP = false;
 
       interfaces.nic0 = {
-        wakeOnLan.enable = true;
         ipv4.addresses = [
           {
             address = cfg.ips.primary;
@@ -105,8 +104,6 @@ in
       openFirewall = false;
     };
 
-    systemd.services.technitium-dns-server.onFailure = [ "notify-ntfy@%n.service" ];
-
     services.netbird = {
       # Pinned to unstable while stable nixpkgs lags behind the self-hosted 0.80.x NetBird stack
       package = if cfg.netbird.useUnstable then pkgs-unstable.netbird else pkgs.netbird;
@@ -119,8 +116,6 @@ in
       };
     };
 
-    systemd.services.netbird-wt0.onFailure = [ "notify-ntfy@%n.service" ];
-
     # Workaround: VPN peers and the external VPS reach local alias IPs (.101/.105/.109)
     # hosted on this same machine, so packets traverse INPUT instead of FORWARD.
     # Alerts via ntfy if NetBird ever renames its internal nftables chain.
@@ -130,7 +125,6 @@ in
       after = [ "netbird-wt0.service" ];
       bindsTo = [ "netbird-wt0.service" ];
       wantedBy = [ "multi-user.target" ];
-      onFailure = [ "notify-ntfy@%n.service" ];
       path = [
         pkgs.coreutils
         pkgs.curl

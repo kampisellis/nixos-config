@@ -149,11 +149,5 @@ in
         }
       '';
     };
-
-    systemd.services = {
-      upsdrv.onFailure = [ "notify-ntfy@%n.service" ];
-      upsd.onFailure = [ "notify-ntfy@%n.service" ];
-      upsmon.onFailure = [ "notify-ntfy@%n.service" ];
-    };
   };
 }

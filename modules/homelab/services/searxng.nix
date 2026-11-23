@@ -18,7 +18,8 @@ in
     services.searx = {
       enable = true;
       package = pkgs-unstable.searxng;
-      redisCreateLocally = true;
+      # Redis is only required when SearXNG's rate limiter / bot protection is enabled
+      redisCreateLocally = false;
       # Out-of-repo secret file containing SEARX_SECRET_KEY=<64-hex-chars>
       environmentFile = "${cfg.secretsDir}/searx.env";
       settings = {
@@ -80,7 +81,5 @@ in
       description = "Search Engine";
       order = 50;
     };
-
-    systemd.services.searx.onFailure = [ "notify-ntfy@%n.service" ];
   };
 }

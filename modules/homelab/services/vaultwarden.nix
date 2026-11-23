@@ -46,10 +46,5 @@ in
       description = "Passwords & 2FA";
       order = 20;
     };
-
-    systemd.services = {
-      vaultwarden.onFailure = [ "notify-ntfy@%n.service" ];
-      backup-vaultwarden.onFailure = [ "notify-ntfy@%n.service" ];
-    };
   };
 }

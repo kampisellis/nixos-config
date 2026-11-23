@@ -32,17 +32,8 @@
     searxng.enable = true;
   };
 
-  system.autoUpgrade = {
-    enable = true;
-    flake = "github:kampisellis/nixos-config#homelab";
-    flags = [ "--refresh" ];
-    dates = "Tue *-*-* 05:30:00";
-    operation = "switch";
-    allowReboot = false;
-    randomizedDelaySec = "15min";
-  };
-
-  systemd.services.nixos-upgrade.onFailure = [ "notify-ntfy@%n.service" ];
+  # Updates are driven by the weekly stable-nixpkgs GitHub PR + manual `just diff`/`test`/`switch`.
+  system.autoUpgrade.enable = false;
 
   # Fixed to the NixOS release originally installed on this host — NEVER change on upgrades.
   system.stateVersion = "25.11";

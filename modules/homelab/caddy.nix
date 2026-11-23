@@ -148,13 +148,10 @@ in
       ];
 
       services = {
-        caddy.onFailure = [ "notify-ntfy@%n.service" ];
-
         kampisellis-site-hugo = {
           description = "Watch and build kampisellis.com Hugo site from NAS";
           wantedBy = [ "multi-user.target" ];
           after = [ "local-fs.target" ];
-          onFailure = [ "notify-ntfy@%n.service" ];
           unitConfig = {
             RequiresMountsFor = "/mnt/nas-data";
             ConditionPathExists = "/mnt/nas-data/Giannis/Apps/Site/hugo.toml";

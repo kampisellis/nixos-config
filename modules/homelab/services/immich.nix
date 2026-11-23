@@ -46,13 +46,6 @@ in
     };
 
     # Prevent Immich from writing into an unmounted /mnt/nas-data directory on the boot SSD
-    systemd.services = {
-      immich-server = {
-        unitConfig.RequiresMountsFor = "/mnt/nas-data";
-        onFailure = [ "notify-ntfy@%n.service" ];
-      };
-      immich-machine-learning.onFailure = [ "notify-ntfy@%n.service" ];
-      postgresql.onFailure = [ "notify-ntfy@%n.service" ];
-    };
+    systemd.services.immich-server.unitConfig.RequiresMountsFor = "/mnt/nas-data";
   };
 }

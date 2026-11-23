@@ -10,8 +10,10 @@ in
       # Keep false so NixOS does not open legacy NetBIOS ports (TCP 139, UDP 137/138);
       # SMB3 TCP 445 is opened explicitly in networking.nix.
       openFirewall = false;
-      # SMB3-only: NetBIOS name service (nmbd, UDP 137/138) and TCP 139 are unnecessary
+      # SMB3-only: NetBIOS name service (nmbd, UDP 137/138) and TCP 139 are unnecessary;
+      # winbindd is also unneeded on a standalone security = "user" server.
       nmbd.enable = false;
+      winbindd.enable = false;
       settings = {
         global = {
           security = "user";
@@ -42,9 +44,7 @@ in
     };
 
     # Prevent smbd from serving an empty directory on the boot SSD if tank/data fails to mount
-    systemd.services.samba-smbd = {
-      unitConfig.RequiresMountsFor = lib.mkForce "/var/lib/samba /mnt/nas-data";
-      onFailure = [ "notify-ntfy@%n.service" ];
-    };
+    systemd.services.samba-smbd.unitConfig.RequiresMountsFor =
+      lib.mkForce "/var/lib/samba /mnt/nas-data";
   };
 }

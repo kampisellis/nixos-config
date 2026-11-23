@@ -31,7 +31,5 @@ in
       description = "Music Library";
       order = 50;
     };
-
-    systemd.services.lidarr.onFailure = [ "notify-ntfy@%n.service" ];
   };
 }

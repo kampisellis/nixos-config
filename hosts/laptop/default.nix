@@ -256,7 +256,6 @@
     kdePackages.gwenview
     kdePackages.kate
     libva-utils
-    nfs-utils
     ntfs3g
     nvtopPackages.amd
     peazip
@@ -267,7 +266,6 @@
   system.autoUpgrade = {
     enable = true;
     flake = "github:kampisellis/nixos-config#laptop";
-    flags = [ "--refresh" ];
     dates = "Tue *-*-* 12:00:00";
     operation = "boot";
     allowReboot = false;

@@ -30,7 +30,7 @@ just switch homelab
   ```routeros
   /tool wol interface=bridge mac=D8:5E:D3:9C:11:15
   ```
-- **Automated updates:** `system.autoUpgrade` pulls `github:kampisellis/nixos-config` weekly (`homelab` Tue `05:30` `switch`, `laptop` Tue `12:00` `boot` on AC power, `allowReboot = false`).
+- **Automated updates:** `homelab` disables `system.autoUpgrade` (relying on the Monday `update-flake-lock.yml` PR + manual `just diff`/`just test`/`just switch`). `laptop` runs `system.autoUpgrade` weekly (`Tue 12:00`, `operation = "boot"` on AC power, `allowReboot = false`).
 
 ---
 
@@ -80,9 +80,14 @@ sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-co
 sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
 
 sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab
+
+# Required because boot.zfs.forceImportRoot = false (hostId = "8425e349"):
+# cleanly export pools imported under the Live ISO before rebooting so first boot imports both pools.
+sudo umount -R /mnt
+sudo zpool export tank backup
 ```
 
-After rebooting, restore repository ownership and recreate local and Samba passwords if `/etc/shadow` was reset:
+After rebooting, restore repository ownership and recreate local and Samba passwords (SMB3-only on TCP `445`, with NetBIOS/`nmbd`/`winbindd` disabled) if `/etc/shadow` was reset:
 
 ```bash
 sudo chown -R <USER>:users /etc/nixos
@@ -101,7 +106,7 @@ Runtime credentials are stored out-of-band in `/var/lib/secrets` (`0700`, `root:
 - `/var/lib/secrets/upsmon.pass` (`0440`, `root:nutmon`) — `<UPSMON_PASSWORD>` (single-line password) for NUT `upsmon`.
 - `/var/lib/secrets/restic.pass` (`0400`, `root:root`) — `<RESTIC_PASSWORD>` (single-line passphrase) for the encrypted Restic repository; keep an offline copy outside the server.
 - `/var/lib/secrets/rclone-backup.conf` (`0600`, `root:root`) — rclone configuration defining the `gdrive` remote for offsite Restic and cloud sync.
-- `/var/lib/secrets/rclone.conf` (`0400`, `root:root`) — optional rclone configuration defining the `gdrive-roms-crypt` remote (an empty file keeps `gdrive-roms.service` cleanly skipped).
+- `/var/lib/secrets/rclone.conf` (`0600`, `root:root`) — optional rclone configuration defining the `gdrive-roms-crypt` remote (`0600` is required so `rclone` can persist refreshed OAuth2 tokens; an empty file keeps `gdrive-roms.service` cleanly skipped).
 
 ---
 
@@ -174,9 +179,17 @@ sudo nix-shell -p sqlite --run "sqlite3 -readonly '$LATEST_VW_DB' 'PRAGMA integr
 
 ### Offsite Restic Verification
 
+Both encrypted repositories (`system-encrypted` and `other-backups-encrypted`) are automatically verified every Sunday at `04:30` by `restic-check-gdrive.service` (`--read-data-subset=5%`). To inspect or run manual checks:
+
 ```bash
 sudo restic-gdrive-system snapshots
 sudo restic-gdrive-system check
+
+sudo restic-gdrive-other-backups snapshots
+sudo restic-gdrive-other-backups check
+
+# Or trigger the weekly 5% data read-back service manually:
+sudo systemctl start restic-check-gdrive.service
 ```
 
 ---
