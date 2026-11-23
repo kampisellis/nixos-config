@@ -31,6 +31,10 @@ in
           browseable = "yes";
           "read only" = "no";
           "valid users" = cfg.user;
+          "force user" = cfg.user;
+          "force group" = "users";
+          "create mask" = "0664";
+          "directory mask" = "0775";
         };
       };
     };

@@ -92,6 +92,27 @@
         "dir_mode=0755"
       ];
     };
+
+    "/mnt/nas-data" = {
+      device = "//10.10.10.5/data";
+      fsType = "cifs";
+      options = [
+        "x-systemd.automount"
+        "noauto"
+        "x-systemd.idle-timeout=60"
+        "x-systemd.device-timeout=5s"
+        "x-systemd.mount-timeout=5s"
+        "nofail"
+        "_netdev"
+        "rw"
+        "vers=3.1.1"
+        "credentials=/var/lib/secrets/smb-homelab.cred"
+        "uid=1000"
+        "gid=1000"
+        "file_mode=0644"
+        "dir_mode=0755"
+      ];
+    };
   };
 
   systemd.tmpfiles.rules = [
