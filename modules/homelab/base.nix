@@ -167,19 +167,18 @@ in
     };
 
     # Global systemd OnFailure drop-in so every failing service/backup/timer alerts ntfy-sh;
-    # per-unit drop-ins clear OnFailure on notify-ntfy@ and ntfy-sh to prevent recursion loops.
+    # same-named per-unit drop-ins mask service.d/10-onfailure.conf on notify-ntfy@ and ntfy-sh
+    # to prevent self-referential failure loops (OnFailure= cannot be cleared with an empty value).
     systemd.units = lib.mkIf cfg.ntfy.enable {
       "service.d/10-onfailure.conf".text = ''
         [Unit]
         OnFailure=notify-ntfy@%n.service
       '';
-      "notify-ntfy@.service.d/99-no-onfailure.conf".text = ''
-        [Unit]
-        OnFailure=
+      "notify-ntfy@.service.d/10-onfailure.conf".text = ''
+        # Masks service.d/10-onfailure.conf to prevent self-referential failure loops
       '';
-      "ntfy-sh.service.d/99-no-onfailure.conf".text = ''
-        [Unit]
-        OnFailure=
+      "ntfy-sh.service.d/10-onfailure.conf".text = ''
+        # Masks service.d/10-onfailure.conf to prevent self-referential failure loops
       '';
     };
 
