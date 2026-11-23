@@ -31,10 +31,11 @@ in
       order = 30;
     };
 
-    systemd.services.couchdb = {
+    systemd.services.couchdb.environment = {
       # epmd is spawned by CouchDB itself; keep it on loopback instead of 0.0.0.0
-      environment.ERL_EPMD_ADDRESS = "127.0.0.1";
-      onFailure = [ "notify-ntfy@%n.service" ];
+      ERL_EPMD_ADDRESS = "127.0.0.1";
+      # Disable Erlang scheduler busy-wait spinning (prevents ~24% idle CPU burn under powersave governor)
+      ERL_ZFLAGS = "+sbwt none +sbwtdcpu none +sbwtdio none";
     };
   };
 }
