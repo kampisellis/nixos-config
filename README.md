@@ -19,7 +19,8 @@ Declarative NixOS flake managing my home server (`homelab`) and daily workstatio
 ├── bin/
 │   └── generate-services-table.nix
 ├── docs/
-│   └── RUNBOOK.md               # Recovery, ZFS maintenance, and restore procedures
+│   ├── HOMELAB_ARCHITECTURE.md  # Full technical architecture, day-2 operations & DR handbook
+│   └── RUNBOOK.md               # Quick-reference recovery, ZFS maintenance, and restore procedures
 ├── hosts/
 │   ├── homelab/                 # Server entry point and hardware config
 │   └── laptop/                  # Workstation entry point and hardware config
@@ -116,4 +117,4 @@ just update homelab
 just services-table
 ```
 
-Operational and recovery procedures are documented in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+For the full canonical architecture, day-2 operations, and disaster recovery handbook, see [docs/HOMELAB_ARCHITECTURE.md](docs/HOMELAB_ARCHITECTURE.md). Quick-reference recovery and drill procedures are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
