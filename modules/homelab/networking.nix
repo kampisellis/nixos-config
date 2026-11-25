@@ -33,6 +33,18 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # TCP BBR + fq for 5G WAN / NetBird / rclone throughput and 16 MiB socket buffers for 2.5GbE SMB3 & WireGuard
+    boot = {
+      kernelModules = [ "tcp_bbr" ];
+      kernel.sysctl = {
+        "net.core.default_qdisc" = "fq";
+        "net.ipv4.tcp_congestion_control" = "bbr";
+        "net.core.rmem_max" = 16777216;
+        "net.core.wmem_max" = 16777216;
+        "net.ipv4.tcp_wmem" = "4096 65536 16777216";
+      };
+    };
+
     # Pin Realtek RTL8125 2.5GbE (MAC d8:5e:d3:9c:11:15) to deterministic name "nic0" with Wake-on-LAN
     systemd.network.links."10-nic0" = {
       matchConfig.MACAddress = "d8:5e:d3:9c:11:15";
@@ -178,9 +190,10 @@ in
       dns = {
         name = "Technitium DNS";
         subdomain = "dns";
-        group = "Infrastructure";
-        icon = "technitium.png";
+        group = "Server & Services";
+        icon = "sh-technitium.svg";
         description = "DNS & Zones";
+        siteMonitor = "http://127.0.0.1:${toString cfg.ports.technitiumUi}";
         order = 20;
         extraCaddyConfig = ''
           @doh path /dns-query*
@@ -197,19 +210,21 @@ in
         name = "MikroTik";
         subdomain = "mikrotik";
         upstream = "http://${cfg.ips.gateway}:80";
-        group = "Infrastructure";
-        icon = "mikrotik.png";
+        group = "Network & Power";
+        icon = "sh-mikrotik-light.svg";
         description = "RouterOS";
-        order = 60;
+        siteMonitor = "http://${cfg.ips.gateway}:80";
+        order = 10;
       };
 
       switch = {
         name = "Ubiquiti Switch";
         subdomain = "switch";
-        group = "Infrastructure";
-        icon = "ubiquiti.png";
+        group = "Network & Power";
+        icon = "sh-ubiquiti-unifi-light.svg";
         description = "Core Switch";
-        order = 70;
+        ping = "10.10.10.2";
+        order = 20;
         extraCaddyConfig = ''
           reverse_proxy https://10.10.10.2 {
             header_down Location ^https?://10\.10\.10\.2(?::443)?(.*)$ https://switch.${cfg.domain}$1
@@ -223,10 +238,11 @@ in
       ap = {
         name = "ZTE AP";
         subdomain = "ap";
-        group = "Infrastructure";
-        icon = "mdi-access-point";
+        group = "Network & Power";
+        icon = "mdi-access-point-#38bdf8";
         description = "Wi-Fi Access Point";
-        order = 80;
+        siteMonitor = "http://10.10.10.3";
+        order = 30;
         extraCaddyConfig = ''
           reverse_proxy http://10.10.10.3 {
             header_up Host 10.10.10.3
@@ -240,10 +256,11 @@ in
       zte5g = {
         name = "ZTE 5G";
         subdomain = "5g";
-        group = "Infrastructure";
-        icon = "mdi-signal-5g";
+        group = "Network & Power";
+        icon = "mdi-signal-5g-#34d399";
         description = "5G CPE Modem";
-        order = 90;
+        siteMonitor = "http://10.10.20.1";
+        order = 40;
         extraCaddyConfig = ''
           reverse_proxy http://10.10.20.1 {
             header_up Host 10.10.20.1

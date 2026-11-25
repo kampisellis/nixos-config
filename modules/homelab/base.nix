@@ -33,6 +33,13 @@ let
 in
 {
   config = lib.mkIf cfg.enable {
+    # Keep background Nix builds from starving Immich, DNS, or Samba and deduplicate store writes
+    nix = {
+      settings.auto-optimise-store = true;
+      daemonCPUSchedPolicy = "idle";
+      daemonIOSchedClass = "idle";
+    };
+
     # Bootloader & headless boot safety
     boot = {
       # Prevent Intel OC Watchdog from claiming /dev/watchdog0 over iTCO_wdt
@@ -40,6 +47,9 @@ in
 
       # Explicit systemd stage-1 initrd (default in 26.05, required in 26.11)
       initrd.systemd.enable = true;
+
+      # Clean disk-backed /tmp on boot
+      tmp.cleanOnBoot = true;
 
       loader = {
         systemd-boot = {
@@ -53,6 +63,9 @@ in
     };
 
     systemd.settings.Manager.RuntimeWatchdogSec = "30s";
+
+    # Distribute 2.5GbE, dual-NVMe, and SATA interrupts across i3-12100 cores
+    services.irqbalance.enable = true;
 
     # Prevent accidental physical bumps or USB keyboard unplug events from powering off the headless server
     services.logind.settings.Login = {
@@ -135,9 +148,10 @@ in
       name = "Cockpit";
       subdomain = "cockpit";
       upstream = "http://127.0.0.1:${toString cfg.ports.cockpit}";
-      group = "Infrastructure";
-      icon = "cockpit.png";
+      group = "Server & Services";
+      icon = "sh-cockpit-light.svg";
       description = "NixOS Server UI";
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.cockpit}";
       order = 10;
     };
 

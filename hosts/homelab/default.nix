@@ -27,7 +27,6 @@
 
     radicale.enable = true;
     couchdb.enable = true;
-    lidarr.enable = true;
     ntfy.enable = true;
     searxng.enable = true;
   };

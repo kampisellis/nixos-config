@@ -47,14 +47,26 @@ let
 
       group = mkOption {
         type = types.str;
-        default = "Infrastructure";
+        default = "Server & Services";
         description = "Homepage section group name.";
       };
 
       icon = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Homepage icon filename (for example, immich.png).";
+        description = "Homepage icon identifier (for example, sh-immich.svg or mdi-access-point-#38bdf8).";
+      };
+
+      siteMonitor = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Optional HTTP endpoint monitored by Homepage for status indicator dots.";
+      };
+
+      ping = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Optional IP address or hostname probed via ICMP ping by Homepage for status indicator dots.";
       };
 
       description = mkOption {
@@ -174,12 +186,6 @@ in
         type = types.port;
         default = 5984;
         description = "Internal loopback port for CouchDB.";
-      };
-
-      lidarr = mkOption {
-        type = types.port;
-        default = 8686;
-        description = "Internal loopback port for Lidarr.";
       };
 
       ntfy = mkOption {

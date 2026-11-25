@@ -76,10 +76,11 @@ in
       name = "SearXNG";
       subdomain = "search";
       upstream = "http://127.0.0.1:${toString cfg.ports.searxng}";
-      group = "Infrastructure";
-      icon = "searxng.png";
+      group = "Server & Services";
+      icon = "sh-searxng.svg";
       description = "Search Engine";
-      order = 50;
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.searxng}";
+      order = 40;
     };
   };
 }

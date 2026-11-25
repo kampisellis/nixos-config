@@ -14,7 +14,6 @@
     ./services/immich.nix
     ./services/radicale.nix
     ./services/couchdb.nix
-    ./services/lidarr.nix
     ./services/ntfy.nix
     ./services/searxng.nix
   ];

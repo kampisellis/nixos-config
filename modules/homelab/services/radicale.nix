@@ -27,9 +27,10 @@ in
       name = "Radicale";
       subdomain = "webdav";
       upstream = "http://127.0.0.1:${toString cfg.ports.radicale}";
-      group = "Core & Media";
-      icon = "radicale.png";
+      group = "Apps & Data";
+      icon = "sh-radicale.svg";
       description = "CalDAV & CardDAV";
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.radicale}/.web/";
       order = 40;
     };
   };

@@ -18,6 +18,8 @@ in
       port = cfg.ports.couchdb;
       databaseDir = "/var/lib/couchdb";
       viewIndexDir = "/var/lib/couchdb";
+      # Allow unauthenticated /_up health checks while keeping require_valid_user = true on all DBs/endpoints
+      extraConfig.chttpd.require_valid_user_except_for_up = true;
     };
 
     homelab.services.obsidian = {
@@ -25,9 +27,10 @@ in
       subdomain = "obsidian";
       path = "/_utils";
       upstream = "http://127.0.0.1:${toString cfg.ports.couchdb}";
-      group = "Core & Media";
-      icon = "obsidian.png";
+      group = "Apps & Data";
+      icon = "sh-obsidian.svg";
       description = "CouchDB Notes";
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.couchdb}/_up";
       order = 30;
     };
 

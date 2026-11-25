@@ -59,6 +59,7 @@ in
       name = "CV Redirect";
       subdomain = "cv";
       redirect = "https://${cfg.domain}{uri}";
+      group = "Server & Services";
       description = "Permanent redirect to apex domain";
       showInHomepage = false;
     };

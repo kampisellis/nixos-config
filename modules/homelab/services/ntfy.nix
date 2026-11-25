@@ -25,10 +25,11 @@ in
       name = "ntfy";
       subdomain = "ntfy";
       upstream = "http://127.0.0.1:${toString cfg.ports.ntfy}";
-      group = "Infrastructure";
-      icon = "ntfy.png";
+      group = "Server & Services";
+      icon = "sh-ntfy.svg";
       description = "Notifications";
-      order = 40;
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.ntfy}/v1/health";
+      order = 30;
     };
   };
 }

@@ -41,9 +41,10 @@ in
       name = "Vaultwarden";
       subdomain = "vault";
       upstream = "http://127.0.0.1:${toString cfg.ports.vaultwarden}";
-      group = "Core & Media";
-      icon = "vaultwarden.png";
+      group = "Apps & Data";
+      icon = "sh-vaultwarden-light.svg";
       description = "Passwords & 2FA";
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.vaultwarden}";
       order = 20;
     };
   };

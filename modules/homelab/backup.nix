@@ -68,7 +68,6 @@ in
           "/var/lib/backup/vaultwarden"
           "/var/lib/radicale"
           "/var/lib/couchdb"
-          "/var/lib/lidarr"
           "/var/lib/private/technitium-dns-server"
           # Static uid/gid allocations so restored file ownership matches after a full rebuild
           "/var/lib/nixos"
@@ -201,36 +200,62 @@ in
         unitConfig.RequiresMountsFor = "/mnt/nas-data";
         path = [
           pkgs.coreutils
+          pkgs.findutils
           pkgs.rclone
+          pkgs.util-linux
         ];
         script = ''
           set -euo pipefail
+
+          if ! mountpoint -q /mnt/nas-data; then
+            echo "ERROR: /mnt/nas-data is not mounted; aborting rclone backup" >&2
+            exit 1
+          fi
+
+          MEDIA_SRC="/mnt/nas-data/Giannis/Apps/Immich/library/admin"
+          DOCS_SRC="/mnt/nas-data/Giannis/Library/Documents"
+          SITE_SRC="/mnt/nas-data/Giannis/Apps/Site"
+
+          for src in "$MEDIA_SRC" "$DOCS_SRC" "$SITE_SRC"; do
+            if [[ ! -d "$src" ]]; then
+              echo "ERROR: backup source directory missing: $src" >&2
+              exit 1
+            fi
+            if [[ -z "$(find "$src" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+              echo "ERROR: backup source directory is empty: $src" >&2
+              exit 1
+            fi
+          done
 
           TODAY="$(date +%Y-%m-%d)"
           RCLONE_FLAGS=(
             --config=${cfg.secretsDir}/rclone-backup.conf
             --fast-list
+            --track-renames
             --transfers=4
             --checkers=8
-            --max-delete=200
             --stats=30s
             --stats-one-line
             --log-level=INFO
           )
 
+          # Per-target --max-delete caps calibrated to library sizes (~16.6k media, ~344 documents, ~242 site)
           rclone sync "''${RCLONE_FLAGS[@]}" \
+            --max-delete=2000 \
             --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/media" \
-            /mnt/nas-data/Giannis/Apps/Immich/library/admin \
+            "$MEDIA_SRC" \
             gdrive:homelab-backups/media
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
+            --max-delete=120 \
             --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/documents" \
-            /mnt/nas-data/Giannis/Library/Documents \
+            "$DOCS_SRC" \
             gdrive:homelab-backups/documents
 
           rclone sync "''${RCLONE_FLAGS[@]}" \
+            --max-delete=100 \
             --backup-dir "gdrive:homelab-backups/_deleted/$TODAY/site" \
-            /mnt/nas-data/Giannis/Apps/Site \
+            "$SITE_SRC" \
             gdrive:homelab-backups/site
 
           # Expire dated trash folders older than 30 days (by folder name, since moved

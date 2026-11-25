@@ -131,10 +131,11 @@ in
     homelab.services.ups = {
       name = "PowerWalker UPS";
       subdomain = "ups";
-      group = "Infrastructure";
-      icon = "mdi-battery-charging";
+      group = "Network & Power";
+      icon = "mdi-battery-charging-#fbbf24";
       description = "UPS IoT Portal";
-      order = 100;
+      ping = "10.10.10.253";
+      order = 50;
       extraCaddyConfig = ''
         reverse_proxy https://10.10.10.253 {
           header_up Host 10.10.10.253

@@ -22,8 +22,19 @@ in
   };
 
   config = lib.mkIf (cfg.enable && svcCfg.enable) {
-    # Pin PostgreSQL major version explicitly to avoid accidental cluster mismatch on channel upgrades
-    services.postgresql.package = pkgs.postgresql_16;
+    # Pin PostgreSQL major version explicitly and tune conservatively for 32 GiB RAM + NVMe ZFS mirror
+    services.postgresql = {
+      package = pkgs.postgresql_16;
+      settings = {
+        shared_buffers = "2GB";
+        effective_cache_size = "8GB";
+        work_mem = "16MB";
+        maintenance_work_mem = "512MB";
+        random_page_cost = 1.1;
+        effective_io_concurrency = 200;
+        checkpoint_completion_target = 0.9;
+      };
+    };
 
     services.immich = {
       enable = true;
@@ -39,9 +50,10 @@ in
       name = "Immich";
       subdomain = "photos";
       upstream = "http://127.0.0.1:${toString cfg.ports.immich}";
-      group = "Core & Media";
-      icon = "immich.png";
+      group = "Apps & Data";
+      icon = "sh-immich.svg";
       description = "Photos & Videos";
+      siteMonitor = "http://127.0.0.1:${toString cfg.ports.immich}";
       order = 10;
     };
 
