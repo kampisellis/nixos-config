@@ -6,6 +6,16 @@
   ...
 }:
 
+let
+  # Patched Dell P2723D EDID with CTA-861 YCbCr 4:4:4 / 4:2:2 flags cleared so amdgpu outputs RGB Full on HDMI
+  dellP2723dRgbEdid =
+    pkgs.runCommandLocal "dell-p2723d-rgb-edid" { } ''
+      install -Dm444 ${./edid/dell-p2723d-rgb.bin} "$out/lib/firmware/edid/dell-p2723d-rgb.bin"
+    ''
+    // {
+      compressFirmware = false;
+    };
+in
 {
   # Use the unstable NetBird module alongside pkgs-unstable.netbird/netbird-ui (0.82.x desktop entry format)
   disabledModules = [ "services/networking/netbird.nix" ];
@@ -45,10 +55,16 @@
     initrd = {
       systemd.enable = true;
       kernelModules = [ "amdgpu" ];
+      # Bundle patched RGB-only EDID in initrd so early-KMS amdgpu applies it before rootfs mount
+      extraFirmwarePaths = [ "edid/dell-p2723d-rgb.bin" ];
     };
 
-    # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend
-    kernelParams = [ "amdgpu.sg_display=0" ];
+    # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend,
+    # and force RGB Full on Dell P2723D over HDMI (kernel 6.18 amdgpu forces YCbCr 4:4:4 when CTA-861 advertises it)
+    kernelParams = [
+      "amdgpu.sg_display=0"
+      "drm.edid_firmware=HDMI-A-1:edid/dell-p2723d-rgb.bin"
+    ];
 
     # Preload TCP BBR module before systemd-sysctl activates BBR congestion control
     kernelModules = [ "tcp_bbr" ];
@@ -203,6 +219,7 @@
   # Hardware: ASUS TUF FX505DY (AMD Ryzen 5 3550H + Vega + Radeon RX 560X + RTL8821CE)
   hardware = {
     enableRedistributableFirmware = true;
+    firmware = [ dellP2723dRgbEdid ];
     cpu.amd.updateMicrocode = true;
 
     graphics = {
