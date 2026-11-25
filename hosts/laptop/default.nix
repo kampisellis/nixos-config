@@ -219,6 +219,14 @@
   services = {
     fstrim.enable = true;
     fwupd.enable = true;
+    # Local caching DNS stub resolver (integrates natively with NetworkManager and NetBird split-DNS via polkit)
+    resolved = {
+      enable = true;
+      settings.Resolve = {
+        FallbackDNS = [ ];
+        LLMNR = "false";
+      };
+    };
     switcherooControl.enable = true;
     power-profiles-daemon.enable = true;
 
