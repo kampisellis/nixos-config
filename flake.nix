@@ -34,7 +34,7 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit pkgs-unstable;
+            inherit nixpkgs-unstable pkgs-unstable;
           };
           modules = [
             { nixpkgs.config.allowUnfree = allowUnfree; }

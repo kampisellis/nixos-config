@@ -6,8 +6,9 @@ let
   enabledServices = lib.attrValues (lib.filterAttrs (_: svc: svc.enable or true) homelabCfg.services);
 
   baseGroups = [
-    "Core & Media"
-    "Infrastructure"
+    "Apps & Data"
+    "Server & Services"
+    "Network & Power"
   ];
 
   extraGroups = lib.sort (a: b: a < b) (
