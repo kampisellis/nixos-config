@@ -7,14 +7,117 @@
 }:
 
 let
-  # Patched Dell P2723D EDID with CTA-861 YCbCr 4:4:4 / 4:2:2 flags cleared so amdgpu outputs RGB Full on HDMI
-  dellP2723dRgbEdid =
-    pkgs.runCommandLocal "dell-p2723d-rgb-edid" { } ''
-      install -Dm444 ${./edid/dell-p2723d-rgb.bin} "$out/lib/firmware/edid/dell-p2723d-rgb.bin"
-    ''
-    // {
-      compressFirmware = false;
-    };
+  # Dynamically apply the patched RGB-only EDID only when a Dell P2723D is attached on HDMI-A-1,
+  # leaving any other HDMI sink (projectors, TVs, other monitors) on its native EDID + HDMI Audio.
+  hdmiEdidOverride = pkgs.writeShellApplication {
+    name = "hdmi-edid-override";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.util-linux
+    ];
+    text = ''
+      lock_file="/run/hdmi-edid-override.lock"
+      cooldown_file="/run/hdmi-edid-override.last-apply"
+
+      exec 9>"$lock_file"
+      flock -x 9
+
+      connector_dir=""
+      for candidate in /sys/class/drm/card*-HDMI-A-1; do
+        if [[ -d "$candidate" ]]; then
+          connector_dir="$candidate"
+          break
+        fi
+      done
+
+      if [[ -z "$connector_dir" ]]; then
+        exit 0
+      fi
+
+      pci_path="$(readlink -f "$connector_dir/device/device" || true)"
+      pci_addr=""
+      if [[ -n "$pci_path" ]]; then
+        pci_addr="$(basename "$pci_path")"
+      fi
+
+      debugfs_dir=""
+      if [[ -n "$pci_addr" && -d "/sys/kernel/debug/dri/$pci_addr/HDMI-A-1" ]]; then
+        debugfs_dir="/sys/kernel/debug/dri/$pci_addr/HDMI-A-1"
+      else
+        card_name="$(basename "$connector_dir")"
+        card_num="''${card_name#card}"
+        card_num="''${card_num%%-*}"
+        if [[ -d "/sys/kernel/debug/dri/$card_num/HDMI-A-1" ]]; then
+          debugfs_dir="/sys/kernel/debug/dri/$card_num/HDMI-A-1"
+        fi
+      fi
+
+      if [[ -z "$debugfs_dir" ]]; then
+        exit 0
+      fi
+
+      edid_override="$debugfs_dir/edid_override"
+      trigger_hotplug="$debugfs_dir/trigger_hotplug"
+
+      if [[ ! -w "$edid_override" ]]; then
+        exit 0
+      fi
+
+      if [[ "''${1:-}" == "--reset" ]]; then
+        printf 'reset' >"$edid_override"
+        rm -f "$cooldown_file"
+        exit 0
+      fi
+
+      status="$(cat "$connector_dir/status" 2>/dev/null || true)"
+
+      if [[ "$status" == "disconnected" ]]; then
+        printf 'reset' >"$edid_override"
+        rm -f "$cooldown_file"
+        exit 0
+      fi
+
+      if [[ "$status" != "connected" ]]; then
+        exit 0
+      fi
+
+      # Read first 256 bytes directly (sysfs bin_attribute st_size can be 0; -v avoids '*' suppression)
+      edid_hex="$(od -An -tx1 -v -N 256 "$connector_dir/edid" 2>/dev/null | tr -d ' \n' || true)"
+      if (( ''${#edid_hex} < 512 )); then
+        exit 0
+      fi
+
+      # Match Dell P2723D strictly: Manufacturer DEL (bytes 8..9 = 10 ac) + Product 0xd140 (bytes 10..11 = 40 d1)
+      if [[ "''${edid_hex:16:8}" != "10ac40d1" ]]; then
+        exit 0
+      fi
+
+      # Already running RGB-only EDID (CTA-861 byte 131 / 0x83 == 0x81) — exit silently to prevent loops
+      if [[ "''${edid_hex:262:2}" == "81" ]]; then
+        exit 0
+      fi
+
+      # Short cooldown guard against rapid re-trigger loops
+      now="$(date +%s)"
+      if [[ -f "$cooldown_file" ]]; then
+        last_apply="$(cat "$cooldown_file" 2>/dev/null || echo 0)"
+        if [[ "$last_apply" =~ ^[0-9]+$ ]] && (( now - last_apply < 5 )); then
+          exit 0
+        fi
+      fi
+
+      printf '%s\n' "$now" >"$cooldown_file"
+      cat "${./edid/dell-p2723d-rgb.bin}" >"$edid_override"
+
+      if [[ -w "$trigger_hotplug" ]]; then
+        printf '1\n' >"$trigger_hotplug"
+      elif [[ -w "$connector_dir/status" ]]; then
+        printf 'detect\n' >"$connector_dir/status"
+      fi
+
+      echo "Applied Dell P2723D RGB-only EDID override on HDMI-A-1 (PCI ''${pci_addr:-unknown}, previous byte 0x83=0x''${edid_hex:262:2})"
+    '';
+  };
 in
 {
   # Use the unstable NetBird module alongside pkgs-unstable.netbird/netbird-ui (0.82.x desktop entry format)
@@ -55,15 +158,11 @@ in
     initrd = {
       systemd.enable = true;
       kernelModules = [ "amdgpu" ];
-      # Bundle patched RGB-only EDID in initrd so early-KMS amdgpu applies it before rootfs mount
-      extraFirmwarePaths = [ "edid/dell-p2723d-rgb.bin" ];
     };
 
-    # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend,
-    # and force RGB Full on Dell P2723D over HDMI (kernel 6.18 amdgpu forces YCbCr 4:4:4 when CTA-861 advertises it)
+    # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend
     kernelParams = [
       "amdgpu.sg_display=0"
-      "drm.edid_firmware=HDMI-A-1:edid/dell-p2723d-rgb.bin"
     ];
 
     # Preload TCP BBR module before systemd-sysctl activates BBR congestion control
@@ -183,8 +282,49 @@ in
       "d /var/lib/secrets 0700 root root -"
     ];
 
-    # Stop user apps before remote-fs.target unmounts CIFS shares during shutdown
-    services."user@".after = [ "remote-fs.target" ];
+    services = {
+      # Stop user apps before remote-fs.target unmounts CIFS shares during shutdown
+      "user@".after = [ "remote-fs.target" ];
+
+      # Dynamically apply Dell P2723D RGB-only EDID on HDMI-A-1 at boot, hotplug, and post-resume
+      hdmi-edid-override = {
+        description = "Apply Dell P2723D RGB-only EDID override on HDMI-A-1";
+        after = [
+          "multi-user.target"
+          "sys-kernel-debug.mount"
+          "suspend.target"
+          "hibernate.target"
+          "hybrid-sleep.target"
+          "suspend-then-hibernate.target"
+        ];
+        wantedBy = [
+          "graphical.target"
+          "suspend.target"
+          "hibernate.target"
+          "hybrid-sleep.target"
+          "suspend-then-hibernate.target"
+        ];
+        unitConfig = {
+          # Allow rapid hotplug uevents without hitting systemd start-rate limits (loop protection is in the script)
+          StartLimitIntervalSec = 0;
+        };
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = lib.getExe hdmiEdidOverride;
+        };
+      };
+
+      # Reset any active HDMI-A-1 EDID override before suspend so swapped displays probe native EDID on wake
+      hdmi-edid-override-reset = {
+        description = "Reset HDMI-A-1 EDID override before suspend";
+        before = [ "sleep.target" ];
+        wantedBy = [ "sleep.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${lib.getExe hdmiEdidOverride} --reset";
+        };
+      };
+    };
 
     # Detach busy CIFS mounts lazily on shutdown so they never stay stacked over autofs after network teardown
     units =
@@ -219,7 +359,6 @@ in
   # Hardware: ASUS TUF FX505DY (AMD Ryzen 5 3550H + Vega + Radeon RX 560X + RTL8821CE)
   hardware = {
     enableRedistributableFirmware = true;
-    firmware = [ dellP2723dRgbEdid ];
     cpu.amd.updateMicrocode = true;
 
     graphics = {
@@ -298,8 +437,14 @@ in
       };
     };
 
-    # Hidraw/uaccess rules for 8BitDo Pro 3 (Bluetooth and USB/2.4GHz dongle) and other gamepads
-    udev.packages = [ pkgs.game-devices-udev-rules ];
+    udev = {
+      # Hidraw/uaccess rules for 8BitDo Pro 3 (Bluetooth and USB/2.4GHz dongle) and other gamepads
+      packages = [ pkgs.game-devices-udev-rules ];
+      # Dynamically apply Dell P2723D RGB-only EDID on HDMI hotplug while leaving other displays native
+      extraRules = ''
+        SUBSYSTEM=="drm", ACTION=="change", ENV{HOTPLUG}=="1", RUN+="${pkgs.systemd}/bin/systemctl start --no-block hdmi-edid-override.service"
+      '';
+    };
   };
 
   # Declarative autostart for wrapped NetBird UI (prevents unwrapped store-path autostart entries)
