@@ -118,6 +118,40 @@ let
       echo "Applied Dell P2723D RGB-only EDID override on HDMI-A-1 (PCI ''${pci_addr:-unknown}, previous byte 0x83=0x''${edid_hex:262:2})"
     '';
   };
+
+  # Isolate pkgs-unstable netbird-ui (fontconfig 2.18.3 / cache-12) from ~/.cache/fontconfig
+  # so it never writes cache-9 -> cache-12 symlinks that crash nixos-26.05 fontconfig 2.17.1 apps (e.g. Thunderbird)
+  netbirdUiIsolated = pkgs.symlinkJoin {
+    name = "netbird-ui-isolated-${pkgs-unstable.netbird-ui.version}";
+    paths = [ pkgs-unstable.netbird-ui ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    meta.mainProgram = "netbird-ui";
+    postBuild = ''
+      rm "$out/bin/netbird-ui"
+      makeWrapper "${pkgs-unstable.netbird-ui}/bin/netbird-ui" "$out/bin/netbird-ui" \
+        --run 'export XDG_CACHE_HOME="''${HOME}/.cache/netbird-ui"'
+    '';
+  };
+
+  # Minimize on Close v2.0.3.0-unsupported (strict_max_version="*") so clicking X minimizes Thunderbird instead of quitting
+  minimizeOnCloseXpi = pkgs.fetchurl {
+    url = "https://github.com/rsjtdrjgfuzkfg/thunderbird-minimizeonclose/releases/download/v2.0.3.0/minimizeonclose-unsupported.xpi";
+    hash = "sha256-ELRQvwAYLL+uQqGCING6q4ufza988w1EqVo1844VZ9g=";
+  };
+
+  # Native KDE Plasma 6 Wayland tray bridge for Thunderbird (autostart minimized, left-click toggle, hide from taskbar when minimized)
+  thunderbirdTrayPython = pkgs.python3.withPackages (ps: [ ps.pyqt6 ]);
+  thunderbirdTray = pkgs.writeShellApplication {
+    name = "thunderbird-tray";
+    runtimeInputs = [
+      pkgs.procps
+      pkgs.systemd
+    ];
+    text = ''
+      export QT_PLUGIN_PATH="${pkgs.qt6.qtwayland}/lib/qt-6/plugins:${pkgs.qt6.qtbase}/lib/qt-6/plugins''${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+      exec "${thunderbirdTrayPython}/bin/python3" "${./thunderbird-tray.py}" "$@"
+    '';
+  };
 in
 {
   # Use the unstable NetBird module alongside pkgs-unstable.netbird/netbird-ui (0.82.x desktop entry format)
@@ -426,7 +460,7 @@ in
       package = pkgs-unstable.netbird;
       ui = {
         enable = true;
-        package = pkgs-unstable.netbird-ui;
+        package = netbirdUiIsolated;
       };
       useRoutingFeatures = "client";
       clients.wt0 = {
@@ -457,23 +491,22 @@ in
       Comment=NetBird desktop client
       Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 /run/current-system/sw/bin/netbird-ui-wt0
       TryExec=/run/current-system/sw/bin/netbird-ui-wt0
-      Icon=${pkgs-unstable.netbird-ui}/share/icons/hicolor/256x256/apps/netbird.png
+      Icon=${netbirdUiIsolated}/share/icons/hicolor/256x256/apps/netbird.png
       Terminal=false
       Categories=Utility;
       X-GNOME-Autostart-enabled=true
     '';
 
-    # Declarative autostart for Thunderbird (pairs with a KDE Plasma Window Rule to start minimized)
+    # Declarative autostart for Thunderbird via KDE Plasma 6 Wayland tray bridge (starts minimized in tray)
     "xdg/autostart/thunderbird.desktop".text = ''
       [Desktop Entry]
       Type=Application
       Name=Thunderbird
       GenericName=Email Client
       Comment=Read and write e-mails or RSS feeds, or manage tasks on calendars.
-      Exec=/run/current-system/sw/bin/thunderbird --name thunderbird
-      TryExec=/run/current-system/sw/bin/thunderbird
+      Exec=/run/current-system/sw/bin/thunderbird-tray --start-minimized
+      TryExec=/run/current-system/sw/bin/thunderbird-tray
       Icon=thunderbird
-      StartupWMClass=thunderbird
       Terminal=false
       Categories=Network;Email;
       X-GNOME-Autostart-enabled=true
@@ -499,8 +532,13 @@ in
       enable = true;
       preferencesStatus = "default";
       preferences = {
-        # Keep Thunderbird's native Linux StatusNotifierItem tray icon always visible in KDE Plasma
-        "mail.biff.show_tray_icon_always" = true;
+        # Disable Thunderbird's non-clickable Wayland SNI icon so thunderbird-tray provides the sole tray icon
+        "mail.biff.show_tray_icon" = false;
+        "mail.biff.show_tray_icon_always" = false;
+      };
+      policies.ExtensionSettings."minimizeonclose@rsjtdrjgfuzkfg.com" = {
+        installation_mode = "force_installed";
+        install_url = "file://${minimizeOnCloseXpi}";
       };
     };
 
@@ -564,6 +602,7 @@ in
       ]
     ))
     pcsx2
+    thunderbirdTray
     discord
     viber
     vscode
