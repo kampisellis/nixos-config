@@ -464,8 +464,19 @@ in
 
   security.rtkit.enable = true;
 
-  # NixOS CLI helper, unpatched binary/AppImage compatibility (gaming stack lives in ./gaming.nix)
+  # NixOS CLI helper, Firefox portal integration, and unpatched binary/AppImage compatibility (gaming stack lives in ./gaming.nix)
   programs = {
+    firefox = {
+      enable = true;
+      preferencesStatus = "default";
+      preferences = {
+        # Delegate external URI/MIME launches to xdg-desktop-portal so child apps (e.g. Element/Electron)
+        # run in a clean environment instead of inheriting Firefox's wrapped LD_LIBRARY_PATH (ffmpeg mismatch)
+        "widget.use-xdg-desktop-portal.mime-handler" = 1;
+        "widget.use-xdg-desktop-portal.open-uri" = 1;
+      };
+    };
+
     nh = {
       enable = true;
       flake = "/etc/nixos";
@@ -533,7 +544,6 @@ in
     (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
     chromium
     element-desktop
-    firefox
     signal-desktop
     telegram-desktop
     # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
