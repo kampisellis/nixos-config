@@ -34,7 +34,6 @@
   '';
 
   environment.systemPackages = with pkgs; [
-    btop
     curl
     dnsutils
     fd

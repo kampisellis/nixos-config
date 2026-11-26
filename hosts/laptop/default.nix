@@ -399,6 +399,7 @@ in
       wayland.enable = true;
     };
     desktopManager.plasma6.enable = true;
+    orca.enable = false;
 
     xserver.xkb = {
       layout = "us,gr";
@@ -503,6 +504,11 @@ in
     };
   };
 
+  environment.plasma6.excludePackages = with pkgs.kdePackages; [
+    discover
+    ark
+  ];
+
   environment.systemPackages = with pkgs; [
     (retroarch.withCores (
       cores: with cores; [
@@ -549,7 +555,6 @@ in
     kdePackages.kate
     libva-utils
     ntfs3g
-    nvtopPackages.amd
     peazip
     smartmontools
     testdisk
