@@ -448,32 +448,59 @@ in
     };
   };
 
-  # Declarative autostart for wrapped NetBird UI (prevents unwrapped store-path autostart entries)
-  environment.etc."xdg/autostart/netbird-wt0.desktop".text = ''
-    [Desktop Entry]
-    Type=Application
-    Name=NetBird @ netbird-wt0
-    Comment=NetBird desktop client
-    Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 /run/current-system/sw/bin/netbird-ui-wt0
-    TryExec=/run/current-system/sw/bin/netbird-ui-wt0
-    Icon=${pkgs-unstable.netbird-ui}/share/icons/hicolor/256x256/apps/netbird.png
-    Terminal=false
-    Categories=Utility;
-    X-GNOME-Autostart-enabled=true
-  '';
+  environment.etc = {
+    # Declarative autostart for wrapped NetBird UI (prevents unwrapped store-path autostart entries)
+    "xdg/autostart/netbird-wt0.desktop".text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=NetBird @ netbird-wt0
+      Comment=NetBird desktop client
+      Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 /run/current-system/sw/bin/netbird-ui-wt0
+      TryExec=/run/current-system/sw/bin/netbird-ui-wt0
+      Icon=${pkgs-unstable.netbird-ui}/share/icons/hicolor/256x256/apps/netbird.png
+      Terminal=false
+      Categories=Utility;
+      X-GNOME-Autostart-enabled=true
+    '';
+
+    # Declarative autostart for Thunderbird (pairs with a KDE Plasma Window Rule to start minimized)
+    "xdg/autostart/thunderbird.desktop".text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=Thunderbird
+      GenericName=Email Client
+      Comment=Read and write e-mails or RSS feeds, or manage tasks on calendars.
+      Exec=/run/current-system/sw/bin/thunderbird --name thunderbird
+      TryExec=/run/current-system/sw/bin/thunderbird
+      Icon=thunderbird
+      StartupWMClass=thunderbird
+      Terminal=false
+      Categories=Network;Email;
+      X-GNOME-Autostart-enabled=true
+    '';
+  };
 
   security.rtkit.enable = true;
 
-  # NixOS CLI helper, Firefox portal integration, and unpatched binary/AppImage compatibility (gaming stack lives in ./gaming.nix)
+  # NixOS CLI helper, Firefox/Thunderbird policies, and unpatched binary/AppImage compatibility (gaming stack lives in ./gaming.nix)
   programs = {
     firefox = {
       enable = true;
       preferencesStatus = "default";
       preferences = {
-        # Delegate external URI/MIME launches to xdg-desktop-portal so child apps (e.g. Element/Electron)
+        # Delegate external URI/MIME launches to xdg-desktop-portal so child apps (e.g. Electron apps)
         # run in a clean environment instead of inheriting Firefox's wrapped LD_LIBRARY_PATH (ffmpeg mismatch)
         "widget.use-xdg-desktop-portal.mime-handler" = 1;
         "widget.use-xdg-desktop-portal.open-uri" = 1;
+      };
+    };
+
+    thunderbird = {
+      enable = true;
+      preferencesStatus = "default";
+      preferences = {
+        # Keep Thunderbird's native Linux StatusNotifierItem tray icon always visible in KDE Plasma
+        "mail.biff.show_tray_icon_always" = true;
       };
     };
 
@@ -491,7 +518,7 @@ in
     };
   };
 
-  # Run Electron & Chromium apps natively on Wayland (VS Code, Discord, Element, Obsidian, Signal, Spotify, Chromium)
+  # Run Electron & Chromium apps natively on Wayland (VS Code, Discord, Obsidian, Spotify, Chromium)
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
   # systemd uaccess rules handle Android ADB devices without requiring a legacy adbusers group.
@@ -537,15 +564,11 @@ in
       ]
     ))
     pcsx2
-    thunderbird
     discord
     viber
     vscode
     (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
     chromium
-    element-desktop
-    signal-desktop
-    telegram-desktop
     # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
 
     haruna
