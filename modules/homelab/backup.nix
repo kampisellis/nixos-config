@@ -46,6 +46,7 @@ in
         # so the backup HDD spins up only once per day.
         interval = "*-*-* 03:05:00";
         commonArgs = [ "--no-sync-snap" ];
+        service.serviceConfig.Type = "oneshot";
         commands = {
           "state-backup" = {
             source = "tank/var-lib";
@@ -54,6 +55,7 @@ in
           "data-backup" = {
             source = "tank/data";
             target = "backup/personal-backup";
+            service.after = [ "syncoid-state-backup.service" ];
           };
         };
       };
@@ -91,6 +93,7 @@ in
         rcloneConfigFile = "${cfg.secretsDir}/rclone-backup.conf";
         paths = [
           "/mnt/nas-data/Giannis/Library/Backups"
+          "/mnt/nas-data/Games/saves"
         ];
         timerConfig = {
           OnCalendar = "*-*-* 03:50:00";
@@ -271,6 +274,11 @@ in
                     "gdrive:homelab-backups/_deleted/$dir"
                 fi
               done
+
+          # Optional external dead-man's-switch heartbeat (safe no-op until configured)
+          if [ -s ${cfg.secretsDir}/healthcheck-url ]; then
+            ${pkgs.curl}/bin/curl -fsS --max-time 10 "$(cat ${cfg.secretsDir}/healthcheck-url)" >/dev/null || true
+          fi
         '';
         serviceConfig = {
           Type = "oneshot";

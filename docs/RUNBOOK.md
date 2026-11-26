@@ -107,6 +107,7 @@ Runtime credentials are stored out-of-band in `/var/lib/secrets` (`0700`, `root:
 - `/var/lib/secrets/restic.pass` (`0400`, `root:root`) — `<RESTIC_PASSWORD>` (single-line passphrase) for the encrypted Restic repository; keep an offline copy outside the server.
 - `/var/lib/secrets/rclone-backup.conf` (`0600`, `root:root`) — rclone configuration defining the `gdrive` remote for offsite Restic and cloud sync.
 - `/var/lib/secrets/rclone.conf` (`0600`, `root:root`) — optional rclone configuration defining the `gdrive-roms-crypt` remote (`0600` is required so `rclone` can persist refreshed OAuth2 tokens; an empty file keeps `gdrive-roms.service` cleanly skipped).
+- `/var/lib/secrets/healthcheck-url` (`0400`, `root:root`) — optional single-line dead-man's-switch URL pinged by `rclone-gdrive-backup.service` after a successful nightly sync (safe no-op if absent or empty).
 
 ---
 
@@ -179,7 +180,7 @@ sudo nix-shell -p sqlite --run "sqlite3 -readonly '$LATEST_VW_DB' 'PRAGMA integr
 
 ### Offsite Restic Verification
 
-Both encrypted repositories (`system-encrypted` and `other-backups-encrypted`) are automatically verified every Sunday at `04:30` by `restic-check-gdrive.service` (`--read-data-subset=5%`). To inspect or run manual checks:
+Both encrypted repositories (`system-encrypted` and `other-backups-encrypted`, covering `Library/Backups` and `Games/saves`) are automatically verified every Sunday at `04:30` by `restic-check-gdrive.service` (`--read-data-subset=5%`). To inspect or run manual checks:
 
 ```bash
 sudo restic-gdrive-system snapshots

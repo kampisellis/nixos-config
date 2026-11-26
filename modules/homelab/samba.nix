@@ -39,6 +39,7 @@ in
           "force group" = "users";
           "create mask" = "0664";
           "directory mask" = "0775";
+          "veto files" = "/Immich/";
         };
       };
     };

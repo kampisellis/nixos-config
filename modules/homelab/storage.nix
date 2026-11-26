@@ -105,7 +105,8 @@ in
         };
       };
 
-      # Disk health monitoring via SMART; -n standby,q avoids waking the spun-down backup HDD
+      # Disk health monitoring via SMART; -n standby,q avoids waking the spun-down backup HDD,
+      # and both short (Sun-Fri) and long (Sat) tests target the 03:05-03:35 backup wake window.
       smartd = {
         enable = true;
         autodetect = true;
@@ -114,7 +115,7 @@ in
           wall.enable = false;
           x11.enable = false;
         };
-        defaults.monitored = "-a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03) -m <nomailer> -M exec ${smartdNtfyScript}";
+        defaults.monitored = "-a -o on -S on -n standby,q -s (S/../../[1-57]/03|L/../../6/03) -m <nomailer> -M exec ${smartdNtfyScript}";
       };
     };
 
