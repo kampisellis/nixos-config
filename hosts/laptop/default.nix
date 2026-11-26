@@ -556,8 +556,12 @@ in
     };
   };
 
-  # Run Electron & Chromium apps natively on Wayland (VS Code, Discord, Obsidian, Spotify, Chromium)
-  environment.sessionVariables.NIXOS_OZONE_WL = "1";
+  environment.sessionVariables = {
+    # Run Electron & Chromium apps natively on Wayland (VS Code, Discord, Obsidian, Spotify, Chromium)
+    NIXOS_OZONE_WL = "1";
+    # Allow Plasma 6's native Wayland virtual keyboard (plasma-keyboard) to appear on mouse clicks when enabled from the tray
+    KWIN_IM_SHOW_ALWAYS = "1";
+  };
 
   # systemd uaccess rules handle Android ADB devices without requiring a legacy adbusers group.
   users = {
@@ -624,6 +628,7 @@ in
     android-tools
     cifs-utils
     kdePackages.gwenview
+    kdePackages.plasma-keyboard
     kdePackages.kate
     libva-utils
     ntfs3g
