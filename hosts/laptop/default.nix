@@ -175,7 +175,10 @@ in
 
   networking = {
     hostName = "laptop";
-    networkmanager.enable = true;
+    networkmanager = {
+      enable = true;
+      wifi.powersave = false;
+    };
   };
 
   # Greek regional formats while keeping system/UI/terminal language in English (modules/common.nix)
