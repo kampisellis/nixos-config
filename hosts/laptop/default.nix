@@ -204,8 +204,11 @@ in
     initrd.kernelModules = [ "amdgpu" ];
 
     # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend
+    # and mitigate Realtek RTL8821CE Wi-Fi stalls (PCIe ASPM & Deep PS) when off Ethernet
     kernelParams = [
       "amdgpu.sg_display=0"
+      "rtw88_pci.disable_aspm=1"
+      "rtw88_core.disable_lps_deep=1"
     ];
 
     # Preload TCP BBR module before systemd-sysctl activates BBR congestion control
@@ -485,9 +488,11 @@ in
     udev = {
       # Hidraw/uaccess rules for 8BitDo Pro 3 (Bluetooth and USB/2.4GHz dongle) and other gamepads
       packages = [ pkgs.game-devices-udev-rules ];
-      # Dynamically apply Dell P2723D RGB-only EDID on HDMI hotplug while leaving other displays native
+      # Dynamically apply Dell P2723D RGB-only EDID on HDMI hotplug while leaving other displays native,
+      # and disable USB autosuspend on the built-in IMC Networks HD UVC webcam (13d3:56a2)
       extraRules = ''
         SUBSYSTEM=="drm", ACTION=="change", ENV{HOTPLUG}=="1", RUN+="${pkgs.systemd}/bin/systemctl start --no-block hdmi-edid-override.service"
+        ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="13d3", ATTR{idProduct}=="56a2", TEST=="power/control", ATTR{power/control}="on"
       '';
     };
   };
@@ -643,12 +648,13 @@ in
     peazip
     smartmontools
     testdisk
+    winbox4
   ];
 
   system.autoUpgrade = {
     enable = true;
     flake = "github:kampisellis/nixos-config#laptop";
-    dates = "Tue *-*-* 12:00:00";
+    dates = "Sun *-*-* 04:00:00";
     operation = "boot";
     allowReboot = false;
     persistent = true;
