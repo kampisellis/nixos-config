@@ -54,15 +54,6 @@ in
         message = "homelab.services has duplicate subdomains among enabled services: ${lib.concatStringsSep ", " duplicateSubdomains}";
       }
     ];
-    # Legacy CV subdomain redirect registered in the same single source of truth
-    homelab.services.cv = {
-      name = "CV Redirect";
-      subdomain = "cv";
-      redirect = "https://${cfg.domain}{uri}";
-      group = "Server & Services";
-      description = "Permanent redirect to apex domain";
-      showInHomepage = false;
-    };
 
     services.caddy = {
       enable = true;
@@ -94,7 +85,7 @@ in
         '';
       };
 
-      virtualHosts."${cfg.domain}, www.${cfg.domain}" = {
+      virtualHosts."${cfg.domain}, www.${cfg.domain}, cv.${cfg.domain}" = {
         extraConfig = ''
           tls {
             dns cloudflare {env.CLOUDFLARE_API_TOKEN}
@@ -104,8 +95,8 @@ in
             X-Content-Type-Options "nosniff"
             Referrer-Policy "strict-origin-when-cross-origin"
           }
-          @www host www.${cfg.domain}
-          redir @www https://${cfg.domain}{uri} permanent
+          @redirect host www.${cfg.domain} cv.${cfg.domain}
+          redir @redirect https://${cfg.domain}{uri} permanent
           encode zstd gzip
           root * /var/lib/kampisellis-site/site
           file_server
@@ -176,7 +167,7 @@ in
             CapabilityBoundingSet = "";
             ReadWritePaths = [
               "/var/lib/kampisellis-site/site"
-              "/mnt/nas-data/Giannis/Apps/Site/resources"
+              "-/mnt/nas-data/Giannis/Apps/Site/resources"
             ];
             ExecStart = lib.concatStringsSep " " [
               (lib.getExe pkgs.hugo)

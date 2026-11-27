@@ -20,8 +20,8 @@ in
           "server min protocol" = "SMB3";
           "disable netbios" = "yes";
           "smb ports" = "445";
-          "hosts allow" = "${cfg.subnets.lan} ${cfg.subnets.netbird} 127.0.0.1";
-          "hosts deny" = "0.0.0.0/0";
+          "hosts allow" = "${cfg.subnets.lan} ${cfg.subnets.netbird} 127.0.0.1 ::1";
+          "hosts deny" = "ALL";
           "invalid users" = [ "root" ];
         };
         roms = {

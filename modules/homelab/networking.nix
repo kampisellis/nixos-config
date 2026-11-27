@@ -86,23 +86,38 @@ in
         "1.0.0.1"
       ];
 
-      # Explicit firewall: no blanket trustedInterfaces on wt0.
-      # DNS (53 TCP/UDP) is open explicitly (Technitium UI is Caddy-only); NetBird opens 51820 (UDP); Samba SMB3 uses TCP 445 only (no NetBIOS 137/138/139).
+      # Explicit per-interface firewall: no blanket trustedInterfaces on wt0.
+      # DNS (53 TCP/UDP), SSH (22), Caddy (80/443), and Samba SMB3 (445 only; no NetBIOS 137/138/139)
+      # are scoped explicitly to nic0 and wt0; NetBird opens UDP 51820 for direct WireGuard P2P.
       firewall = {
         enable = true;
-        allowedTCPPorts = [
-          22
-          53
-          80
-          443
-          445
-        ];
-        allowedUDPPorts = [
-          53
-        ];
-        interfaces.wt0.allowedTCPPorts = [
-          cfg.ports.staticSite
-        ];
+        interfaces = {
+          nic0 = {
+            allowedTCPPorts = [
+              22
+              53
+              80
+              443
+              445
+            ];
+            allowedUDPPorts = [
+              53
+            ];
+          };
+          wt0 = {
+            allowedTCPPorts = [
+              22
+              53
+              80
+              443
+              445
+              cfg.ports.staticSite
+            ];
+            allowedUDPPorts = [
+              53
+            ];
+          };
+        };
       };
     };
 
@@ -123,14 +138,14 @@ in
       clients.wt0 = {
         port = cfg.ports.netbird;
         interface = "wt0";
-        openFirewall = false;
+        openFirewall = true;
         autoStart = true;
       };
     };
 
     # Workaround: VPN peers and the external VPS reach local alias IPs (.101/.105/.109)
     # hosted on this same machine, so packets traverse INPUT instead of FORWARD.
-    # Alerts via ntfy if NetBird ever renames its internal nftables chain.
+    # Alerts via ntfy if NetBird ever renames its internal nftables chains.
     # Can be retired once the external VPS and NetBird peers target the NetBird peer IP directly.
     systemd.services.netbird-local-route-fix = lib.mkIf cfg.netbird.enableLocalRouteFix {
       description = "Bridge NetBird route ACLs (netbird-rt-fwd) into INPUT chain for local server alias IPs";
@@ -139,31 +154,41 @@ in
       wantedBy = [ "multi-user.target" ];
       path = [
         pkgs.coreutils
-        pkgs.curl
         pkgs.gnugrep
         pkgs.nftables
       ];
       script = ''
         missing_count=0
-        alerted=0
+        alerted_missing=0
+        add_fail_count=0
+        alerted_add_fail=0
 
         while true; do
           if nft list chain ip netbird netbird-acl-input-rules >/dev/null 2>&1; then
             missing_count=0
-            alerted=0
+            alerted_missing=0
             if ! nft list chain ip netbird netbird-acl-input-rules | grep -q "jump netbird-rt-fwd"; then
-              nft add rule ip netbird netbird-acl-input-rules jump netbird-rt-fwd || true
+              if nft add rule ip netbird netbird-acl-input-rules jump netbird-rt-fwd; then
+                add_fail_count=0
+                alerted_add_fail=0
+              else
+                add_fail_count=$((add_fail_count + 1))
+                if [ "$add_fail_count" -ge 6 ] && [ "$alerted_add_fail" -eq 0 ]; then
+                  printf '%s\n' "Failed to add jump netbird-rt-fwd rule to ip netbird netbird-acl-input-rules for 30s; VPN access to local alias IPs may be broken." \
+                    | ${lib.getExe cfg.notifyScript} "NetBird nftables Rule Add Failed" "high" "warning" || true
+                  alerted_add_fail=1
+                fi
+              fi
+            else
+              add_fail_count=0
+              alerted_add_fail=0
             fi
           else
             missing_count=$((missing_count + 1))
-            if [ "$missing_count" -ge 6 ] && [ "$alerted" -eq 0 ]; then
-              curl --silent --max-time 10 \
-                -H "Title: NetBird nftables Chain Missing" \
-                -H "Priority: high" \
-                -H "Tags: warning" \
-                -d "Chain ip netbird netbird-acl-input-rules not found for 30s; VPN access to local alias IPs may be broken." \
-                "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
-              alerted=1
+            if [ "$missing_count" -ge 6 ] && [ "$alerted_missing" -eq 0 ]; then
+              printf '%s\n' "Chain ip netbird netbird-acl-input-rules not found for 30s; VPN access to local alias IPs may be broken." \
+                | ${lib.getExe cfg.notifyScript} "NetBird nftables Chain Missing" "high" "warning" || true
+              alerted_missing=1
             fi
           fi
           sleep 5
