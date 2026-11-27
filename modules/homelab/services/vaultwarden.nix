@@ -47,5 +47,9 @@ in
       siteMonitor = "http://127.0.0.1:${toString cfg.ports.vaultwarden}";
       order = 20;
     };
+
+    # Run backups strictly via backup-vaultwarden.timer (23:00), never automatically on every boot
+    # (prevents boot delays and overwriting a freshly restored backup during bare-metal DR).
+    systemd.services.backup-vaultwarden.wantedBy = lib.mkForce [ ];
   };
 }

@@ -2,38 +2,26 @@
   config,
   lib,
   pkgs,
+  utils,
   ...
 }:
 
 let
   cfg = config.homelab;
+  backupHddDevice = "/dev/disk/by-id/ata-ST1000LM035-1RK172_WL1LLNEG";
+  backupHddDeviceUnit = "${utils.escapeSystemdPath backupHddDevice}.device";
 
   zedNtfyScript = pkgs.writeShellScript "zed-notify-ntfy" ''
-    subject="''${1:-ZFS Event on ${config.networking.hostName}}"
-    body="$(${pkgs.coreutils}/bin/cat)"
-    ${pkgs.curl}/bin/curl \
-      --silent \
-      --show-error \
-      --max-time 10 \
-      -H "Title: $subject" \
-      -H "Priority: high" \
-      -H "Tags: floppy_disk,warning" \
-      --data-binary "$body" \
-      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
+    set -euo pipefail
+    subject="''${*:-ZFS Event on ${config.networking.hostName}}"
+    exec ${lib.getExe cfg.notifyScript} "$subject" "high" "floppy_disk,warning"
   '';
 
   smartdNtfyScript = pkgs.writeShellScript "smartd-notify-ntfy" ''
+    set -euo pipefail
     subject="''${SMARTD_SUBJECT:-SMART Alert on ${config.networking.hostName}}"
     message="''${SMARTD_FULLMESSAGE:-SMART event detected on ''${SMARTD_DEVICE:-unknown device}}"
-    ${pkgs.curl}/bin/curl \
-      --silent \
-      --show-error \
-      --max-time 10 \
-      -H "Title: $subject" \
-      -H "Priority: high" \
-      -H "Tags: warning" \
-      --data-binary "$message" \
-      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
+    printf '%s\n' "$message" | ${lib.getExe cfg.notifyScript} "$subject" "high" "warning"
   '';
 
   diskCapacityAlertScript = pkgs.writeShellScript "disk-capacity-alert" ''
@@ -56,19 +44,8 @@ let
     done
 
     if [ -n "$alerts" ]; then
-      body="$(printf 'Storage capacity threshold (>=%s%%) exceeded on ${config.networking.hostName}:\n%s' "$threshold" "$alerts")"
-      ${pkgs.curl}/bin/curl \
-        --silent \
-        --show-error \
-        --fail \
-        --max-time 10 \
-        --retry 3 \
-        --retry-delay 2 \
-        -H "Title: Disk Capacity Alert on ${config.networking.hostName}" \
-        -H "Priority: high" \
-        -H "Tags: floppy_disk,warning" \
-        --data-binary "$body" \
-        "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts"
+      printf 'Storage capacity threshold (>=%s%%) exceeded on ${config.networking.hostName}:\n%s' "$threshold" "$alerts" \
+        | ${lib.getExe cfg.notifyScript} "Disk Capacity Alert on ${config.networking.hostName}" "high" "floppy_disk,warning"
     fi
   '';
 in
@@ -98,15 +75,16 @@ in
           settings = {
             ZED_EMAIL_ADDR = [ "ntfy" ];
             ZED_EMAIL_PROG = "${zedNtfyScript}";
-            ZED_EMAIL_OPTS = "@SUBJECT@";
+            ZED_EMAIL_OPTS = "'@SUBJECT@'";
             ZED_NOTIFY_INTERVAL_SECS = 3600;
             ZED_NOTIFY_VERBOSE = false;
           };
         };
       };
 
-      # Disk health monitoring via SMART; -n standby,q avoids waking the spun-down backup HDD,
-      # and both short (Sun-Fri) and long (Sat) tests target the 03:05-03:35 backup wake window.
+      # Disk health monitoring via SMART; -n standby,50,q avoids waking the spun-down backup HDD
+      # during normal daily cycles (syncoid wakes it every 24h) while guaranteeing a fallback check
+      # after 50 skipped 30-min polls (~25.5h) so the drive never goes unchecked indefinitely.
       smartd = {
         enable = true;
         autodetect = true;
@@ -115,7 +93,7 @@ in
           wall.enable = false;
           x11.enable = false;
         };
-        defaults.monitored = "-a -o on -S on -n standby,q -s (S/../../[1-57]/03|L/../../6/03) -m <nomailer> -M exec ${smartdNtfyScript}";
+        defaults.monitored = "-a -o on -S on -n standby,50,q -s (S/../../[1-57]/03|L/../../6/03) -m <nomailer> -M exec ${smartdNtfyScript}";
       };
     };
 
@@ -126,11 +104,13 @@ in
       "d /var/cache/rclone 0700 root root -"
     ];
 
-    # Spin down 1TB SATA backup HDD after 15 minutes of inactivity
+    # Spin down 1TB SATA backup HDD after 15 minutes of inactivity (triggered once when the device appears)
     systemd.services = {
       hdd-spindown = {
         description = "Set spin-down timeout on backup SATA HDD (ST1000LM035)";
-        wantedBy = [ "multi-user.target" ];
+        wantedBy = [ backupHddDeviceUnit ];
+        after = [ backupHddDeviceUnit ];
+        unitConfig.ConditionPathExists = backupHddDevice;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
@@ -139,7 +119,7 @@ in
           ProtectHome = true;
           ProtectKernelModules = true;
           ProtectControlGroups = true;
-          ExecStart = "${pkgs.hdparm}/bin/hdparm -B 127 -S 180 /dev/disk/by-id/ata-ST1000LM035-1RK172_WL1LLNEG";
+          ExecStart = "${pkgs.hdparm}/bin/hdparm -B 127 -S 180 ${backupHddDevice}";
         };
       };
 
@@ -200,6 +180,7 @@ in
       path = [ "/run/wrappers" ];
       serviceConfig = {
         Type = "notify";
+        ExecStartPre = "-/run/wrappers/bin/fusermount3 -uz /mnt/roms";
         ExecStart = ''
           ${pkgs.rclone}/bin/rclone mount gdrive-roms-crypt: /mnt/roms \
             --config=${cfg.secretsDir}/rclone.conf \
@@ -212,7 +193,7 @@ in
             --buffer-size 64M \
             --cache-dir /var/cache/rclone
         '';
-        ExecStop = "/run/wrappers/bin/fusermount3 -u /mnt/roms";
+        ExecStop = "-/run/wrappers/bin/fusermount3 -uz /mnt/roms";
         Restart = "on-failure";
         RestartSec = "15s";
       };

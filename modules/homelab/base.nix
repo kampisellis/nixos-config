@@ -8,6 +8,29 @@
 let
   cfg = config.homelab;
 
+  homelabNotify = pkgs.writeShellScriptBin "homelab-notify" ''
+    set -euo pipefail
+    title="''${1:-Homelab Alert on ${config.networking.hostName}}"
+    priority="''${2:-default}"
+    tags="''${3:-bell}"
+    body="$(${pkgs.coreutils}/bin/cat)"
+
+    ${pkgs.curl}/bin/curl \
+      --fail \
+      --silent \
+      --show-error \
+      --max-time 5 \
+      --retry 2 \
+      --retry-delay 1 \
+      --retry-connrefused \
+      -H "Title: $title" \
+      -H "Priority: $priority" \
+      -H "Tags: $tags" \
+      --data-binary "$body" \
+      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" \
+      >/dev/null
+  '';
+
   notifyNtfyScript = pkgs.writeShellScript "notify-ntfy" ''
     set -euo pipefail
     unit="''${1:-unknown}"
@@ -15,27 +38,16 @@ let
     ts="$(${pkgs.coreutils}/bin/date -Iseconds)"
     logs="$(${pkgs.systemd}/bin/journalctl -u "$unit" -n 15 --no-pager --output=short-iso 2>/dev/null || echo '(journal unavailable)')"
 
-    body="$(printf 'Unit: %s\nHost: %s\nTime: %s\n\nLast 15 journal lines:\n%s\n' "$unit" "$host" "$ts" "$logs")"
-
-    ${pkgs.curl}/bin/curl \
-      --silent \
-      --show-error \
-      --fail \
-      --max-time 10 \
-      --retry 3 \
-      --retry-delay 2 \
-      -H "Title: Homelab Service Failed: $unit" \
-      -H "Priority: high" \
-      -H "Tags: warning" \
-      --data-binary "$body" \
-      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts"
+    printf 'Unit: %s\nHost: %s\nTime: %s\n\nLast 15 journal lines:\n%s\n' "$unit" "$host" "$ts" "$logs" \
+      | ${lib.getExe homelabNotify} "Homelab Service Failed: $unit" "high" "warning"
   '';
 in
 {
   config = lib.mkIf cfg.enable {
-    # Keep background Nix builds from starving Immich, DNS, or Samba and deduplicate store writes
+    homelab.notifyScript = homelabNotify;
+
+    # Keep background Nix builds from starving Immich, DNS, or Samba
     nix = {
-      settings.auto-optimise-store = true;
       daemonCPUSchedPolicy = "idle";
       daemonIOSchedClass = "idle";
     };
@@ -44,9 +56,6 @@ in
     boot = {
       # Prevent Intel OC Watchdog from claiming /dev/watchdog0 over iTCO_wdt
       blacklistedKernelModules = [ "intel_oc_wdt" ];
-
-      # Explicit systemd stage-1 initrd (default in 26.05, required in 26.11)
-      initrd.systemd.enable = true;
 
       # Clean disk-backed /tmp on boot
       tmp.cleanOnBoot = true;
@@ -62,7 +71,15 @@ in
       };
     };
 
-    systemd.settings.Manager.RuntimeWatchdogSec = "30s";
+    systemd = {
+      settings.Manager.RuntimeWatchdogSec = "30s";
+
+      # Protect headless server slices from RAM-exhaustion freezes under ZFS ARC + Immich ML
+      oomd = {
+        enableRootSlice = true;
+        enableSystemSlice = true;
+      };
+    };
 
     # Distribute 2.5GbE, dual-NVMe, and SATA interrupts across i3-12100 cores
     services.irqbalance.enable = true;
@@ -131,10 +148,13 @@ in
       enable = true;
       port = cfg.ports.cockpit;
       openFirewall = false;
+      allowed-origins = [
+        "https://cockpit.${cfg.domain}"
+        "wss://cockpit.${cfg.domain}"
+      ];
       settings.WebService = {
         AllowUnencrypted = true;
         ProtocolHeader = "X-Forwarded-Proto";
-        Origins = lib.mkForce "https://cockpit.${cfg.domain} wss://cockpit.${cfg.domain}";
       };
     };
 
@@ -158,6 +178,7 @@ in
     # Reusable hardened systemd failure notifier targeting local ntfy-sh
     systemd.services."notify-ntfy@" = {
       description = "Send systemd failure alert to ntfy for %i";
+      after = [ "ntfy-sh.service" ];
       serviceConfig = {
         Type = "oneshot";
         DynamicUser = true;
@@ -198,6 +219,7 @@ in
 
     environment.systemPackages = with pkgs; [
       hdparm
+      homelabNotify
       nut
       smartmontools
       zfs

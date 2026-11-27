@@ -117,6 +117,12 @@ in
       description = "Directory containing out-of-repo secret files.";
     };
 
+    notifyScript = mkOption {
+      type = types.package;
+      internal = true;
+      description = "Internal helper binary sending alerts to local ntfy-sh.";
+    };
+
     ips = {
       primary = mkOption {
         type = types.str;

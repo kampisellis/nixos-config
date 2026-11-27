@@ -10,6 +10,7 @@ let
   nutGroup = config.power.ups.upsmon.group;
 
   upsNtfyScript = pkgs.writeShellScript "ups-notify-ntfy" ''
+    set -euo pipefail
     notify_type="''${NOTIFYTYPE:-EVENT}"
     ups_name="''${UPSNAME:-myups}"
     message="''${1:-UPS event $notify_type on $ups_name}"
@@ -33,15 +34,8 @@ let
         ;;
     esac
 
-    ${pkgs.curl}/bin/curl \
-      --silent \
-      --show-error \
-      --max-time 10 \
-      -H "Title: UPS [$notify_type] on ${config.networking.hostName}" \
-      -H "Priority: $priority" \
-      -H "Tags: $tags" \
-      -d "$message ($ups_name)" \
-      "http://127.0.0.1:${toString cfg.ports.ntfy}/homelab-alerts" || true
+    printf '%s\n' "$message ($ups_name)" \
+      | ${lib.getExe cfg.notifyScript} "UPS [$notify_type] on ${config.networking.hostName}" "$priority" "$tags"
   '';
 in
 {

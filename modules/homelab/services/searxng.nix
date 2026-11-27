@@ -26,7 +26,7 @@ in
         server = {
           bind_address = "127.0.0.1";
           port = cfg.ports.searxng;
-          secret_key = "@SEARX_SECRET_KEY@";
+          secret_key = "$SEARX_SECRET_KEY";
           base_url = "https://search.${cfg.domain}/";
           limiter = false;
         };
@@ -81,6 +81,29 @@ in
       description = "Search Engine";
       siteMonitor = "http://127.0.0.1:${toString cfg.ports.searxng}";
       order = 40;
+    };
+
+    # Harden searx.service natively on nixos-26.05 without importing the unstable searx module
+    # (searx-init.service writes /run/searx/settings.yml separately; searx.service only reads it).
+    systemd.services.searx.serviceConfig = {
+      CacheDirectory = "searx";
+      CacheDirectoryMode = "0700";
+      CapabilityBoundingSet = "";
+      LockPersonality = true;
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      PrivateTmp = true;
+      ProtectControlGroups = true;
+      ProtectHome = true;
+      ProtectKernelModules = true;
+      ProtectKernelTunables = true;
+      ProtectSystem = "strict";
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
+      RestrictNamespaces = true;
     };
   };
 }
