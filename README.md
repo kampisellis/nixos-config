@@ -22,7 +22,7 @@ Declarative NixOS flake managing my home server (`homelab`) and daily workstatio
 │   └── RUNBOOK.md               # Quick-reference recovery, ZFS maintenance, and restore procedures
 ├── hosts/
 │   ├── homelab/                 # Server entry point and hardware config
-│   └── laptop/                  # Workstation entry point and hardware config
+│   └── laptop/                  # Workstation config (default, desktop, gaming, tray bridge, Dell EDID)
 └── modules/
     ├── common.nix               # Shared Nix settings, locale, timezone, base CLI tools
     ├── devshell.nix             # Dev shell (just, nvd, statix, deadnix, nixfmt)
@@ -72,15 +72,15 @@ The server runs on a single 2.5GbE interface (`nic0`, Wake-on-LAN enabled) with 
 - **Local backup pool (`backup`):** Single SATA HDD configured to spin down when idle. All local replication and snapshot pruning runs in a single nightly window so the drive wakes up once per day.
 - **Offsite backups:** Critical application state, databases, NixOS uid/gid maps, and runtime secrets are backed up daily with Restic (encrypted). Media, documents, and site source are synced separately to cloud storage with a delete-limit safeguard and a dated `--backup-dir` trash that expires after 30 days.
 
-Nightly & weekly backup/monitoring sequence (all timers are persistent, so jobs missed while the server was off run at the next boot):
+Nightly & weekly backup/monitoring sequence (all backup and capacity-monitoring timers below are persistent, so jobs missed while the server was off run at the next boot):
 
-1. `23:00` — Consistent Vaultwarden SQLite backup to `/var/lib/backup/vaultwarden`.
+1. `23:00` — Consistent Vaultwarden SQLite backup to `/var/lib/backup/vaultwarden` (timer-only; does not run on every boot).
 2. `02:15` — PostgreSQL dump of the Immich database.
-3. `03:00` — Scheduled `sanoid` snapshots on `tank`.
-4. `03:05` — `syncoid` replication from `tank` to `backup`.
+3. `03:00` — Scheduled `sanoid` snapshots on `tank` (ordered after DB dumps on catch-up boots).
+4. `03:05` — `syncoid` replication from `tank` to `backup` (ordered after `sanoid` and DB dumps).
 5. `03:20` — Per-class pruning of older replicated snapshots on `backup`.
 6. `03:45` — Encrypted offsite Restic backup (`system-encrypted`: databases, app state, `/var/lib/nixos`, and secrets).
-7. `03:50` — Encrypted offsite Restic backup (`other-backups-encrypted`: `/mnt/nas-data/Giannis/Library/Backups`).
+7. `03:50` — Encrypted offsite Restic backup (`other-backups-encrypted`: `/mnt/nas-data/Giannis/Library/Backups` and `/mnt/nas-data/Games/saves`).
 8. `04:00` — Offsite `rclone` sync of Immich media, documents, and Hugo site source (with 30-day `_deleted/` trash).
 9. `08:00` — Daily storage capacity check (`disk-capacity-alert`, alerts `ntfy` if `/`, `/boot`, `tank`, or `backup` ≥ 80%).
 10. `Sun 04:30` — Weekly Restic integrity check (`restic-check-gdrive`, `--read-data-subset=5%` on both repositories).

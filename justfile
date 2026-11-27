@@ -21,9 +21,14 @@ fmt:
 build host=default_host:
     nixos-rebuild build --flake .#{{host}}
 
-# Compare ./result against the currently running system using nvd
-diff host=default_host: (build host)
-    nvd diff /run/current-system ./result
+# Compare built configuration against the currently running system using nvd (leaves no ./result GC root)
+diff host=default_host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    nix build ".#nixosConfigurations.{{host}}.config.system.build.toplevel" --out-link "$tmp/result"
+    nvd diff /run/current-system "$tmp/result"
 
 # Temporarily activate configuration (reverted automatically on reboot)
 test host=default_host:

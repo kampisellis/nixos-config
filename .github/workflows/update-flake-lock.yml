@@ -30,6 +30,14 @@ jobs:
       - name: Verify evaluation after update
         run: nix flake check --no-build --show-trace
 
+      - name: Verify zero evaluation warnings
+        run: |
+          for host in homelab laptop; do
+            warnings="$(nix eval --json ".#nixosConfigurations.${host}.config.warnings")"
+            echo "${host} warnings: ${warnings}"
+            test "${warnings}" = "[]"
+          done
+
       - name: Check formatting and linters
         run: |
           nix build \
@@ -43,6 +51,7 @@ jobs:
           nix build \
             .#packages.x86_64-linux.services-table \
             .#nixosConfigurations.homelab.config.services.caddy.package \
+            .#nixosConfigurations.laptop.config.services.netbird.ui.package \
             --no-link
 
       - name: Create Pull Request

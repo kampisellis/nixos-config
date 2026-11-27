@@ -75,9 +75,9 @@ sudo mount -t zfs tank/data /mnt/mnt/nas-data
 sudo nixos-generate-config --no-filesystems --root /mnt
 sudo cp /mnt/etc/nixos/hardware-configuration.nix /tmp/hardware-configuration.nix
 sudo rm -f /mnt/etc/nixos/configuration.nix /mnt/etc/nixos/hardware-configuration.nix
-sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos
+nix-shell -p git --run "sudo git clone https://github.com/kampisellis/nixos-config.git /mnt/etc/nixos"
 sudo cp /tmp/hardware-configuration.nix /mnt/etc/nixos/hosts/homelab/hardware-configuration.nix
-sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix
+nix-shell -p git --run "sudo git -C /mnt/etc/nixos add hosts/homelab/hardware-configuration.nix"
 
 sudo nixos-install --root /mnt --flake /mnt/etc/nixos#homelab
 
@@ -173,9 +173,7 @@ sudo -u postgres dropdb --if-exists immich_restore_test
 Daily consistent SQLite backups are written to `/var/lib/backup/vaultwarden/`. Verify the latest backup passes SQLite integrity checks in read-only mode:
 
 ```bash
-LATEST_VW_DB="$(sudo ls -1t /var/lib/backup/vaultwarden/*.sqlite3 | head -n 1)"
-echo "Checking: $LATEST_VW_DB"
-sudo nix-shell -p sqlite --run "sqlite3 -readonly '$LATEST_VW_DB' 'PRAGMA integrity_check;'"
+sudo nix-shell -p sqlite --run "sqlite3 -readonly /var/lib/backup/vaultwarden/db.sqlite3 'PRAGMA integrity_check;'"
 ```
 
 ### Offsite Restic Verification
