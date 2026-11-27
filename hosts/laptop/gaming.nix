@@ -2,10 +2,11 @@
 
 let
   powerprofilesctl = "${pkgs.power-profiles-daemon}/bin/powerprofilesctl";
-  gamemodePowerState = "\${XDG_RUNTIME_DIR:-/tmp}/gamemode-prev-power-profile";
 
   gamemodePowerStart = pkgs.writeShellScript "gamemode-power-start" ''
-    state="${gamemodePowerState}"
+    set -euo pipefail
+    [ -n "''${XDG_RUNTIME_DIR:-}" ] || exit 0
+    state="''${XDG_RUNTIME_DIR}/gamemode-prev-power-profile"
     if [ ! -f "$state" ]; then
       prev="$(${powerprofilesctl} get 2>/dev/null || true)"
       case "$prev" in
@@ -18,7 +19,9 @@ let
   '';
 
   gamemodePowerEnd = pkgs.writeShellScript "gamemode-power-end" ''
-    state="${gamemodePowerState}"
+    set -euo pipefail
+    [ -n "''${XDG_RUNTIME_DIR:-}" ] || exit 0
+    state="''${XDG_RUNTIME_DIR}/gamemode-prev-power-profile"
     target="balanced"
     if [ -f "$state" ]; then
       saved="$(cat "$state" 2>/dev/null || true)"
@@ -43,8 +46,8 @@ in
   programs = {
     steam = {
       enable = true;
-      remotePlay.openFirewall = true;
-      localNetworkGameTransfers.openFirewall = true;
+      remotePlay.openFirewall = false;
+      localNetworkGameTransfers.openFirewall = false;
       extraCompatPackages = with pkgs; [ proton-ge-bin ];
     };
 

@@ -148,7 +148,7 @@ let
       pkgs.systemd
     ];
     text = ''
-      export QT_PLUGIN_PATH="${pkgs.qt6.qtwayland}/lib/qt-6/plugins:${pkgs.qt6.qtbase}/lib/qt-6/plugins''${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+      export QT_PLUGIN_PATH="${pkgs.qt6.qtwayland}/${pkgs.qt6.qtbase.qtPluginPrefix}:${pkgs.qt6.qtbase}/${pkgs.qt6.qtbase.qtPluginPrefix}''${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
       exec "${thunderbirdTrayPython}/bin/python3" "${./thunderbird-tray.py}" "$@"
     '';
   };
@@ -167,9 +167,8 @@ in
   # Allows `nix flake check` to evaluate this host cleanly before hardware-configuration.nix is generated
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  # Keep desktop & gaming smooth during background Nix builds and deduplicate store writes
+  # Keep desktop & gaming smooth during background Nix builds
   nix = {
-    settings.auto-optimise-store = true;
     daemonCPUSchedPolicy = "idle";
     daemonIOSchedClass = "idle";
   };
@@ -189,10 +188,7 @@ in
       efi.canTouchEfiVariables = true;
     };
 
-    initrd = {
-      systemd.enable = true;
-      kernelModules = [ "amdgpu" ];
-    };
+    initrd.kernelModules = [ "amdgpu" ];
 
     # Prevent AMD Vega 8 (Picasso) split green/black display flash on DPMS-off & suspend
     kernelParams = [
@@ -324,13 +320,14 @@ in
       hdmi-edid-override = {
         description = "Apply Dell P2723D RGB-only EDID override on HDMI-A-1";
         after = [
-          "multi-user.target"
+          "systemd-udevd.service"
           "sys-kernel-debug.mount"
           "suspend.target"
           "hibernate.target"
           "hybrid-sleep.target"
           "suspend-then-hibernate.target"
         ];
+        before = [ "display-manager.service" ];
         wantedBy = [
           "graphical.target"
           "suspend.target"
@@ -537,7 +534,7 @@ in
         "mail.biff.show_tray_icon_always" = false;
       };
       policies.ExtensionSettings."minimizeonclose@rsjtdrjgfuzkfg.com" = {
-        installation_mode = "force_installed";
+        installation_mode = "normal_installed";
         install_url = "file://${minimizeOnCloseXpi}";
       };
     };
@@ -610,13 +607,11 @@ in
     discord
     viber
     vscode
-    (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix#antigravity-cli -- "$@"'')
+    (writeShellScriptBin "agy" ''exec nix run github:numtide/llm-agents.nix/c0b9f909da5d15fb74c5f715d64a7de252d85487#antigravity-cli -- "$@"'')
     chromium
-    # whatsie # Pulls insecure qtwebengine-5 (use Flatpak, zapzap, or WhatsApp Web PWA)
 
     haruna
     jdk11
-    # jetbrains-toolbox # upstream 404 in 26.05
     metadata-cleaner
     obsidian
     onlyoffice-desktopeditors

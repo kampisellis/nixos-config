@@ -116,7 +116,10 @@ if (wins.length > 0) {
 
 
 def runtime_dir() -> str:
-    return os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/thunderbird-tray-{os.getuid()}"
+    rdir = os.environ.get("XDG_RUNTIME_DIR")
+    if not rdir:
+        raise SystemExit("XDG_RUNTIME_DIR is not set; refusing to fall back to /tmp")
+    return rdir
 
 
 def wait_for_dbus_service(service: str, timeout: float = 30.0) -> bool:

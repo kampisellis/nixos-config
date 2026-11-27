@@ -3,6 +3,7 @@
 {
   nix = {
     package = pkgs.lixPackageSets.stable.lix;
+    channel.enable = false;
 
     settings = {
       experimental-features = [
